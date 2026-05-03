@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>HLB Finance - लोन मैनेजर</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; }
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            padding: 15px;
+        }
+        .login-box {
+            background: white;
+            padding: 30px 20px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
+        .login-box h1 { color: #2c3e50; margin-bottom: 5px; font-size: 20px; }
+        .login-box .sub { color: #666; font-size: 11px; margin-bottom: 20px; }
+        .login-box input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 10px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .login-box .restore-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .restore-section h4 { font-size: 13px; margin-bottom: 8px; color: #555; }
+        .error { color: red; margin-top: 8px; font-size: 12px; }
+        .dashboard { display: none; }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .header h1 { font-size: 16px; margin: 0; }
+        .header .sub { font-size: 9px; opacity: 0.7; }
+        .user-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .role-badge { background: #27ae60; padding: 3px 8px; border-radius: 15px; font-size: 10px; }
+        .logout-btn { background: #e74c3c; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 12px; }
+        .lang-selector { background: rgba(255,255,255,0.2); padding: 3px 6px; border-radius: 6px; border: none; color: white; cursor: pointer; font-size: 11px; }
+        .lang-selector option { background: #2c3e50; color: white; }
+        .two-columns { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
+        .left-col, .right-col { flex: 1; min-width: 280px; }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            color: #27ae60;
+            margin-bottom: 8px;
+            font-size: 14px;
+            border-left: 3px solid #27ae60;
+            padding-left: 8px;
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 6px;
+            margin-top: 3px;
+        }
+        .stat-item {
+            text-align: center;
+            background: rgba(255,255,255,0.12);
+            padding: 4px 6px;
+            border-radius: 6px;
+        }
+        .stat-label { font-size: 8px; opacity: 0.9; margin-bottom: 2px; }
+        .stat-value { font-size: 12px; font-weight: bold; }
+        .month-selector {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 3px;
+        }
+        .month-selector select {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 2px 5px;
+            border-radius: 12px;
+            font-size: 9px;
+            cursor: pointer;
+        }
+        .month-selector select option { background: #764ba2; color: white; }
+        .month-selector button {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 8px;
+            cursor: pointer;
+        }
+        .form-group { margin-bottom: 6px; }
+        .form-group label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 2px; color: #555; }
+        input, select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        button {
+            background: #27ae60;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            margin: 2px;
+        }
+        button.danger { background: #e74c3c; }
+        button.info { background: #3498db; }
+        button.warning { background: #f39c12; }
+        button.small { padding: 3px 6px; font-size: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 5px; text-align: left; font-size: 10px; }
+        th { background: #27ae60; color: white; font-size: 10px; }
+        .remaining { background: #ffeaa7; font-weight: bold; }
+        .ledger-item {
+            background: #f8f9fa;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 6px;
+            border-left: 3px solid #27ae60;
+            font-size: 11px;
+        }
+        .fine-item { border-left-color: #e74c3c; background: #ffeaea; }
+        .collection-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px;
+            border-bottom: 1px solid #eee;
+            flex-wrap: wrap;
+            gap: 4px;
+            font-size: 11px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close { float: right; cursor: pointer; font-size: 18px; }
+        .hidden { display: none; }
+        .search-box { position: relative; }
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 120px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .suggestion-item { padding: 6px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 11px; }
+        .suggestion-item:hover { background: #e8f5e9; }
+        /* Thermal Receipt Styles */
+        .receipt-slip { width:100%; max-width:280px; margin:0 auto; font-family:'Courier New',Courier,monospace; font-size:11px; color:#000; background:#fff; }
+        .receipt-slip .r-center { text-align:center; }
+        .receipt-slip .r-title { font-size:14px; font-weight:bold; letter-spacing:1px; }
+        .receipt-slip .r-sub { font-size:9px; margin-bottom:2px; }
+        .receipt-slip .r-divider { border-top:1px dashed #000; margin:5px 0; }
+        .receipt-slip .r-divider-double { border-top:2px solid #000; margin:5px 0; }
+        .receipt-slip .r-row { display:flex; justify-content:space-between; margin:2px 0; }
+        .receipt-slip .r-label { color:#333; }
+        .receipt-slip .r-amount { font-weight:bold; font-size:16px; text-align:center; margin:4px 0; }
+        .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
+        .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
+
+        @media print {
+            @page { size: 58mm auto; margin: 2mm; }
+            body * { visibility: hidden; }
+            .receipt-print-area, .receipt-print-area * { visibility: visible; }
+            .receipt-print-area { position:fixed; top:0; left:0; width:54mm; padding:2mm; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; top: 0; left: 0; width: 100%; padding: 5px; }
+            .no-print, button, .header, .card, .modal { display: none; }
+            .receipt-print-area { display: block !important; }
+        }
+        .backup-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .date-input { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .date-input input { flex: 1; }
+        .officer-table {
+            width: 100%;
+            margin-top: 8px;
+            border-collapse: collapse;
+        }
+        .officer-table th, .officer-table td {
+            padding: 4px;
+            font-size: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+            vertical-align: middle;
+        }
+        .officer-table td .btn-group { display: flex; gap: 4px; flex-wrap: wrap; }
+        .edit-officer { background: #3498db; }
+        .backup-officer { background: #f39c12; }
+        .delete-officer { background: #e74c3c; }
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding: 6px;
+            border-bottom: 2px solid #27ae60;
+            margin-bottom: 6px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .collection-container { max-height: 280px; overflow-y: auto; }
+        .loan-search-box {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .loan-search-box input { flex: 2; }
+        .loan-search-box select { flex: 1; }
+        .loan-search-box .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 101;
+        }
+        .total-loan-box {
+            background: #e8f5e9;
+            padding: 4px 8px;
+            border-radius: 6px;
+            text-align: right;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .loan-card {
+            border-bottom: 1px solid #ddd;
+            padding: 8px;
+            margin-top: 5px;
+        }
+        .loan-line1 { font-size: 11px; font-weight: 500; }
+        .loan-line2 { font-size: 11px; margin-top: 4px; }
+        .loan-buttons { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+        .bottom-tabs {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            justify-content: space-around;
+            align-items: center;
+            padding: 6px 10px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            border-top: 1px solid #ddd;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            font-size: 12px;
+            padding: 6px 10px;
+            color: #666;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+        .tab-btn.active { color: #27ae60; background: #e8f5e9; }
+        .tab-icon { font-size: 18px; }
+        .tab-label { font-size: 9px; }
+        .tab-section { display: block; }
+        @media (min-width: 769px) {
+            .bottom-tabs { display: none !important; }
+            .two-columns { display: flex !important; }
+            .tab-section { display: block !important; }
+        }
+        @media (max-width: 768px) {
+            .bottom-tabs { display: flex; }
+            .two-columns { display: block !important; margin-bottom: 55px; }
+            .tab-section { display: none; }
+            .tab-section.active-section { display: block; }
+            .card { padding: 8px; }
+            button { padding: 6px 10px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        .details-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .details-table th, .details-table td { border: 1px solid #ccc; padding: 4px; font-size: 11px; text-align: left; }
+        .details-table th { background: #27ae60; color: white; }
+        .text-right { text-align: right; }
+    </style>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div id="loginPage" class="login-container">
+    <div class="login-box">
+        <h1 id="loginTitle">HLB FINANCE</h1>
+        <div class="sub" id="loginSub">Powered By Hindu Lion Brothers</div>
+        <p id="loginText">लॉगिन करें</p>
+        <input type="text" id="loginUsername" placeholder="यूजरनेम" autocomplete="off">
+        <input type="password" id="loginPassword" placeholder="पासवर्ड" autocomplete="off">
+        <button onclick="checkLogin()" id="loginBtn">लॉगिन करें</button>
+        <div id="loginError" class="error"></div>
+        <div class="restore-section">
+            <h4>📂 बैकअप रिस्टोर करें</h4>
+            <input type="file" id="restoreFileLogin" accept=".json" style="margin-bottom:6px;">
+            <button onclick="restoreBackupFromLogin()" style="background:#3498db;">रिस्टोर करें</button>
+            <p style="font-size:9px; margin-top:6px; color:gray;">JSON फ़ाइल चुनें और रिस्टोर करें</p>
+        </div>
+    </div>
+</div>
+
+<div id="dashboard" class="dashboard">
+    <div class="header">
+        <div><h1 id="dashboardCompanyName">HLB FINANCE</h1><div class="sub" id="dashboardTagline">Powered By Hindu Lion Brothers</div></div>
+        <div class="user-info">
+            <span class="role-badge" id="userRoleBadge"></span>
+            <span id="userNameDisplay"></span>
+            <select id="languageSelect" class="lang-selector" onchange="changeLanguage()"><option value="hi">हिंदी</option><option value="en">English</option></select>
+            <button class="logout-btn" onclick="logout()">लॉगआउट</button>
+        </div>
+    </div>
+
+    <div class="bottom-tabs">
+        <button class="tab-btn active" data-tab="stats"><span class="tab-icon">📊</span><span class="tab-label">आँकड़े</span></button>
+        <button class="tab-btn" data-tab="collection"><span class="tab-icon">💰</span><span class="tab-label">कलेक्शन</span></button>
+        <button class="tab-btn" data-tab="loan"><span class="tab-icon">📝</span><span class="tab-label">लोन</span></button>
+        <button class="tab-btn" data-tab="other"><span class="tab-icon">💾</span><span class="tab-label">मोड़</span></button>
+    </div>
+
+    <div class="two-columns">
+        <div class="left-col">
+            <div class="tab-section" data-section="stats">
+                <div class="stats-card">
+                    <div style="font-size:10px; font-weight:bold; margin-bottom:3px;" id="statsTitle">सम्पूर्ण जानकारी</div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-label" id="statTotalLoanLabel">कुल लोन</div><div class="stat-value" id="totalLoanGiven">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label" id="statTotalReceivedLabel">कुल प्राप्त</div><div class="stat-value" id="totalReceived">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label" id="statTotalFineLabel">कुल फाइन</div><div class="stat-value" id="totalFine">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label" id="statTotalRemainingLabel">कुल बकाया</div><div class="stat-value" id="totalRemaining">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label" id="statTodayLabel">आज का</div><div class="stat-value" id="todayCollection">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label" id="statMonthLabel">महीने का</div><div class="stat-value" id="monthCollection">₹0</div>
+                            <div class="month-selector">
+                                <select id="monthSelect"><option value="1">जन</option><option value="2">फर</option><option value="3">मार</option><option value="4">अप्रै</option><option value="5">मई</option><option value="6">जून</option><option value="7">जुला</option><option value="8">अग</option><option value="9">सित</option><option value="10">अक्टू</option><option value="11">नव</option><option value="12">दिस</option></select>
+                                <input type="number" id="yearSelect" style="width:50px; background:rgba(255,255,255,0.2); color:white; border:none; font-size:9px;" placeholder="साल" value="2024">
+                                <button onclick="updateMonthCollection()" id="viewBtn">देखें</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 id="backupTitle">बैकअप</h3>
+                    <div class="backup-buttons">
+                        <button onclick="downloadJSON()" id="downloadJsonBtn">JSON</button>
+                        <button onclick="downloadExcelFile()" id="downloadExcelBtn">Excel</button>
+                        <button onclick="document.getElementById('restoreFile').click()" id="restoreBtn">रिस्टोर</button>
+                        <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreBackupInside(this)">
+                    </div>
+                    <div style="margin-top:8px; display:flex; gap:6px;">
+                        <button onclick="saveToGist()" style="flex:1; background:#24292e; display:flex; align-items:center; justify-content:center; gap:5px;">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                            GitHub Gist Save
+                        </button>
+                        <button onclick="restoreFromGist()" style="flex:1; background:#0366d6; display:flex; align-items:center; justify-content:center; gap:5px;">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                            Gist Restore
+                        </button>
+                    </div>
+                    <div id="gistStatus" style="font-size:9px; color:gray; margin-top:4px;"></div>
+                    <button onclick="openGistModal()" style="width:100%; margin-top:6px; background:#6c757d; font-size:10px;">⚙️ Gist Token Setup</button>
+                    <p style="font-size:9px; color:gray; margin-top:2px;" id="restoreInfo">JSON फाइल से डाटा रिस्टोर</p>
+                </div>
+            </div>
+
+            <div class="tab-section" data-section="collection">
+                <div class="card">
+                    <h3 id="newCollectionTitle">नया कलेक्शन</h3>
+                    <div class="form-group"><label id="customerNameLabel">ग्राहक नाम</label>
+                        <div class="search-box"><input type="text" id="collectionNameInput" placeholder="नाम लिखें" autocomplete="off"><div id="collectionSuggestions" class="suggestions"></div></div>
+                    </div>
+                    <div class="form-group"><label id="loanSelectLabel">लोन चुनें</label>
+                        <select id="collectionLoanSelect"><option value="">पहले ग्राहक चुनें</option></select>
+                    </div>
+                    <div class="form-group"><label id="amountLabel">राशि</label><input type="number" id="collectionAmount" step="0.01" placeholder="राशि"></div>
+                    <div class="form-group"><label id="dateLabel">तारीख</label><input type="date" id="collectionDate"></div>
+                    <button onclick="addDirectCollection()" style="width:100%" id="addCollectionBtn">कलेक्शन जोड़ें</button>
+                </div>
+                <div class="card">
+                    <h3 id="datePickerTitle">तारीख चुनें</h3>
+                    <div class="date-input"><input type="date" id="datePicker"><button onclick="showCollectionByDate()" id="showDateBtn">दिखाएं</button></div>
+                    <div class="collection-container" id="collectionListContainer"><div id="collectionList"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="tab-section" data-section="loan">
+                <div class="card">
+                    <h3 id="ledgerTitle">ग्राहक लेज़र</h3>
+                    <div class="search-box"><input type="text" id="ledgerSearchInput" placeholder="ग्राहक नाम लिखें..." autocomplete="off"><div id="ledgerSuggestions" class="suggestions"></div></div>
+                    <div id="ledgerResult" style="margin-top:8px; max-height: 230px; overflow-y: auto;"></div>
+                </div>
+                <div class="card">
+                    <h3 id="searchTitle">ग्राहक खोजें</h3>
+                    <div class="search-box"><input type="text" id="searchInput" placeholder="नाम या मोबाइल..." autocomplete="off"><div id="searchSuggestions" class="suggestions"></div></div>
+                    <div id="searchResult" style="margin-top: 8px;"></div>
+                </div>
+                <div class="card" id="newLoanCard">
+                    <h3 id="newLoanTitle">नया लोन</h3>
+                    <div class="total-loan-box" id="totalLoanBox">आज तक लोन: ₹0</div>
+                    <div class="loan-search-box">
+                        <div style="position:relative; flex:2;">
+                            <input type="text" id="loanSearchInput" placeholder="ग्राहक नाम से खोजें..." autocomplete="off">
+                            <div id="loanSearchSuggestions" class="suggestions"></div>
+                        </div>
+                        <select id="loanCustomerSelect"><option value="">-- ड्रॉपडाउन से --</option></select>
+                    </div>
+                    <div class="form-group"><label id="loanDateLabel">लोन तारीख</label><input type="date" id="loanStartDate"></div>
+                    <div class="form-group"><label id="loanTypeLabel">लोन टाइप</label><select id="loanType" onchange="toggleLoanType()"><option value="day" id="dayLoanOption">दिन वाला</option><option value="month" id="monthLoanOption">महीने वाला</option></select></div>
+                    <div class="form-group"><label id="principalLabel">मूलधन</label><input type="number" id="loanPrincipal" value="1000" step="0.01" oninput="calculateDayLoan()"></div>
+                    <div id="dayOptionsDiv">
+                        <div class="form-group"><label id="daysLabel">दिन</label><select id="loanDays" onchange="calculateDayLoan()"><option value="60">60 दिन</option><option value="80">80 दिन</option><option value="100">100 दिन</option><option value="120">120 दिन</option></select></div>
+                        <div class="form-group"><label id="interestLabel">ब्याज (20%)</label><input type="text" id="loanDayInterest" readonly></div>
+                        <div class="form-group"><label id="perDayLabel">प्रति दिन</label><input type="text" id="loanPerDay" readonly></div>
+                    </div>
+                    <div id="monthOptionsDiv" class="hidden">
+                        <div class="form-group"><label id="monthInterestLabel">ब्याज दर (%)</label><input type="number" id="loanMonthInterest" value="10" step="0.01"></div>
+                    </div>
+                    <button onclick="createLoan()" style="width:100%" id="createLoanBtn">लोन बनाएं</button>
+                </div>
+                <div class="card">
+                    <h3 id="activeLoanTitle">एक्टिव लोन</h3>
+                    <div style="overflow-x: auto;">
+                        <table style="min-width: 550px;">
+                            <thead><tr><th id="thCustomer">ग्राहक</th><th id="thPrincipal">मूलधन</th><th id="thInterest">ब्याज</th><th id="thTotal">कुल</th><th id="thRemaining">बाकी</th><th id="thPerDay">प्रति दिन</th><th id="thAction">एक्शन</th></tr></thead>
+                            <tbody id="activeLoansList"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-section" data-section="other">
+                <div class="card" id="officerListCard">
+                    <h3 id="officerListTitle">लोन ऑफिसर</h3>
+                    <div id="officerListDiv"></div>
+                    <div id="newOfficerForm" style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px;">
+                        <h4 style="font-size:12px;" id="newOfficerTitle">नया लोन ऑफिसर</h4>
+                        <input type="text" id="officerName" placeholder="नाम" style="margin-bottom:4px">
+                        <input type="password" id="officerPassword" placeholder="पासवर्ड" style="margin-bottom:4px">
+                        <input type="text" id="officerMobile" placeholder="मोबाइल" style="margin-bottom:4px">
+                        <input type="text" id="officerPrintName" placeholder="प्रिंट में कंपनी का नाम (वैकल्पिक)" style="margin-bottom:4px">
+                        <input type="text" id="officerTagline" placeholder="प्रिंट में टैगलाइन (वैकल्पिक)" style="margin-bottom:4px">
+                        <button onclick="createOfficer()" style="width:100%; margin-top:6px" id="createOfficerBtn">बनाएं</button>
+                    </div>
+                </div>
+                <div class="card" id="newCustomerCard">
+                    <h3 id="newCustomerTitle">नया ग्राहक</h3>
+                    <input type="text" id="customerName" placeholder="नाम" style="margin-bottom:4px">
+                    <input type="text" id="customerMobile" placeholder="मोबाइल" style="margin-bottom:4px">
+                    <input type="text" id="customerAddress" placeholder="पता" style="margin-bottom:4px">
+                    <button onclick="createCustomer()" style="width:100%" id="createCustomerBtn">ग्राहक बनाएं</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="paymentModal" class="modal"><div class="modal-content"><span class="close" onclick="closePaymentModal()">&times;</span><h3>पेमेंट</h3><input type="hidden" id="paymentLoanId"><p><strong>ग्राहक:</strong> <span id="paymentUserName"></span></p><p><strong>बाकी:</strong> ₹<span id="paymentRemaining"></span></p><div class="form-group"><label>तारीख</label><input type="date" id="paymentDate"></div><div class="form-group"><label>राशि</label><input type="number" id="paymentAmount" step="0.01" required></div><div class="form-group"><label>डिस्काउंट</label><input type="number" id="discountAmount" step="0.01" value="0"></div><div class="form-group"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="principalPaymentCheck" style="width:auto;"> <span style="color:#e74c3c;font-weight:bold;">यह राशि सीधे मूलधन में जमा करें</span></label><p style="font-size:9px;color:#888;margin-top:2px;">✅ चेक करने पर: राशि मूलधन से कटेगी, अगले माह उसी मूलधन पर ब्याज लगेगा</p></div><button onclick="addPaymentWithDiscount()">जमा करें</button></div></div>
+<div id="editPaymentModal" class="modal"><div class="modal-content"><span class="close" onclick="closeEditPaymentModal()">&times;</span><h3>पेमेंट एडिट</h3><input type="hidden" id="editPaymentId"><input type="hidden" id="editLoanId"><div class="form-group"><label>नाम</label><input type="text" id="editCustomerName"></div><div class="form-group"><label>राशि</label><input type="number" id="editAmount" step="0.01"></div><div class="form-group"><label>तारीख</label><input type="date" id="editDate"></div><button onclick="saveEditPayment()">सेव</button><button onclick="deletePayment()" class="danger">डिलीट</button></div></div>
+<div id="overdueModal" class="modal"><div class="modal-content"><span class="close" onclick="closeOverdueModal()">&times;</span><h3>फाइन</h3><input type="hidden" id="overdueLoanId"><p><strong>ग्राहक:</strong> <span id="overdueUserName"></span></p><p><strong>बाकी:</strong> ₹<span id="overdueRemaining"></span></p><div class="form-group"><label>फाइन</label><input type="number" id="overdueAmount" step="0.01" required></div><button onclick="addOverdue()">जोड़ें</button></div></div>
+<div id="discountModal" class="modal"><div class="modal-content"><span class="close" onclick="closeDiscountModal()">&times;</span><h3>डिस्काउंट</h3><input type="hidden" id="discountLoanId"><p><strong>ग्राहक:</strong> <span id="discountUserName"></span></p><p><strong>बाकी:</strong> ₹<span id="discountRemaining"></span></p><div class="form-group"><label>डिस्काउंट</label><input type="number" id="discountGiveAmount" step="0.01" required></div><button onclick="addDiscount()">दें</button></div></div>
+<div id="editLoanModal" class="modal"><div class="modal-content"><span class="close" onclick="closeEditLoanModal()">&times;</span><h3>लोन एडिट</h3><input type="hidden" id="editLoanId"><div class="form-group"><label>ब्याज दर (%)</label><input type="number" id="editInterestRate" step="0.01"></div><div class="form-group"><label>मूलधन</label><input type="number" id="editPrincipal" step="0.01"></div><div class="form-group"><label>लोन तारीख</label><input type="date" id="editLoanDate"></div><button onclick="saveEditLoan()">सेव</button><button onclick="recalculateRemaining()">🔄 Remaining ठीक करें</button><button onclick="closeEditLoanModal()">रद्द</button></div></div>
+<div id="detailsModal" class="modal"><div class="modal-content"><span class="close" onclick="closeDetailsModal()">&times;</span><h3>लोन विवरण</h3><div id="detailsModalContent"></div></div></div>
+
+<!-- GitHub Gist Setup Modal -->
+<div id="gistModal" class="modal">
+    <div class="modal-content" style="max-width:420px;">
+        <span class="close" onclick="closeGistModal()">&times;</span>
+        <h3>🐙 GitHub Gist Setup</h3>
+        <div style="background:#f6f8fa; padding:10px; border-radius:8px; font-size:11px; margin:10px 0; line-height:1.6;">
+            <strong>Token kaise banayein:</strong><br>
+            1. <a href="https://github.com" target="_blank" style="color:#0366d6;">github.com</a> par login karein<br>
+            2. Profile → Settings → Developer settings<br>
+            3. Personal access tokens → Tokens (classic)<br>
+            4. Generate new token → Sirf <strong>"gist"</strong> tick karein<br>
+            5. Token copy karke neeche paste karein
+        </div>
+        <div class="form-group">
+            <label style="font-size:11px; font-weight:bold;">GitHub Personal Access Token</label>
+            <input type="password" id="gistTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="font-family:monospace; font-size:12px;">
+        </div>
+        <div id="gistIdDisplay" style="font-size:10px; color:#555; margin:6px 0; display:none;">
+            <strong>Saved Gist ID:</strong> <span id="gistIdText"></span>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:10px;">
+            <button onclick="saveGistToken()" style="flex:1; background:#24292e;">💾 Token Save करें</button>
+            <button onclick="closeGistModal()" class="danger" style="flex:1;">रद्द करें</button>
+        </div>
+        <p style="font-size:9px; color:#888; margin-top:8px;">⚠️ Token IndexedDB में save होता है — browser data clear होने पर फिर से डालना होगा</p>
+    </div>
+</div>
+
+<!-- Receipt Modal -->
+<div id="receiptModal" class="modal">
+    <div class="modal-content" style="max-width:320px; padding:10px;">
+        <span class="close" onclick="closeReceiptModal()">&times;</span>
+        <div id="receiptContent"></div>
+        <div style="display:flex; gap:6px; margin-top:10px;">
+            <button onclick="printReceipt()" style="flex:1; background:#27ae60;">🖨️ प्रिंट करें</button>
+            <button onclick="closeReceiptModal()" class="danger" style="flex:1;">बंद करें</button>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Payment Modal -->
+<div id="bulkPaymentModal" class="modal">
+    <div class="modal-content" style="max-width:500px;">
+        <span class="close" onclick="closeBulkPaymentModal()">&times;</span>
+        <h3>📋 Bulk Payment — Excel से</h3>
+        <p style="font-size:11px; color:#555; margin:6px 0;"><strong>ग्राहक:</strong> <span id="bulkCustomerName"></span> &nbsp;|&nbsp; <strong>लोन बाकी:</strong> ₹<span id="bulkLoanRemaining"></span></p>
+        <input type="hidden" id="bulkLoanId">
+
+        <div style="background:#e8f5e9; padding:8px; border-radius:6px; font-size:10px; margin-bottom:8px;">
+            💡 Excel से copy करें और नीचे paste करें (Ctrl+V)<br>
+            <strong>Format:</strong> Amount (left column) &nbsp;|&nbsp; Date+Time (right column)<br>
+            <span style="color:#888;">₹ symbol और comma अपने आप हट जाएंगे</span>
+        </div>
+
+        <textarea id="bulkPasteArea" rows="8" style="width:100%; font-family:monospace; font-size:12px; border:2px dashed #27ae60; border-radius:6px; padding:8px; resize:vertical;" placeholder="यहाँ Excel से paste करें...&#10;500	01/04/2026&#10;₹1,000	02/04/2026 10:30&#10;1500	03/04/2026"></textarea>
+
+        <div id="bulkPreview" style="margin-top:8px; max-height:200px; overflow-y:auto;"></div>
+
+        <div style="display:flex; gap:6px; margin-top:10px;">
+            <button onclick="parseBulkPayment()" style="flex:1; background:#3498db;">👁️ Preview देखें</button>
+            <button onclick="submitBulkPayment()" style="flex:1; background:#27ae60;" id="bulkSubmitBtn" disabled>✅ सभी जमा करें</button>
+            <button onclick="closeBulkPaymentModal()" class="danger" style="flex:1;">रद्द करें</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let users = {}, officers = {}, loans = {}, ledger = {}, fines = {};
+    let currentUser = null;
+    let selectedLoanCustomerId = null;
+    let currentLang = 'hi';
+    
+    const translations = {
+        hi: {
+            loginTitle: "HLB FINANCE", loginSub: "Powered By Hindu Lion Brothers", loginText: "लॉगिन", loginBtn: "लॉगिन",
+            statsTitle: "सम्पूर्ण जानकारी", statTotalLoanLabel: "कुल लोन", statTotalReceivedLabel: "प्राप्त", statTotalFineLabel: "फाइन",
+            statTotalRemainingLabel: "बकाया", statTodayLabel: "आज", statMonthLabel: "महीना", viewBtn: "देखें",
+            newCollectionTitle: "नया कलेक्शन", customerNameLabel: "ग्राहक नाम", loanSelectLabel: "लोन चुनें", amountLabel: "राशि", dateLabel: "तारीख", addCollectionBtn: "कलेक्शन जोड़ें",
+            datePickerTitle: "तारीख चुनें", showDateBtn: "दिखाएं", backupTitle: "बैकअप", downloadJsonBtn: "JSON", downloadExcelBtn: "Excel",
+            restoreBtn: "रिस्टोर", restoreInfo: "JSON से रिस्टोर", ledgerTitle: "लेज़र", searchTitle: "खोजें",
+            officerListTitle: "लोन ऑफिसर", newOfficerTitle: "नया लोन ऑफिसर", createOfficerBtn: "बनाएं",
+            newCustomerTitle: "नया ग्राहक", createCustomerBtn: "बनाएं", newLoanTitle: "नया लोन", loanDateLabel: "लोन तारीख",
+            loanTypeLabel: "टाइप", dayLoanOption: "दिन वाला", monthLoanOption: "महीना", principalLabel: "मूलधन",
+            daysLabel: "दिन", interestLabel: "ब्याज", perDayLabel: "प्रति दिन", monthInterestLabel: "ब्याज दर (%)", createLoanBtn: "बनाएं",
+            activeLoanTitle: "एक्टिव लोन", thCustomer: "ग्राहक", thPrincipal: "मूलधन", thInterest: "ब्याज", thTotal: "कुल", thRemaining: "बाकी", thPerDay: "प्रति दिन", thAction: "एक्शन",
+            details: "विवरण", print: "प्रिंट", payment: "पेमेंट", fine: "फाइन", discount: "डिस्काउंट", deleteLoan: "लोन डिलीट", deleteCustomer: "ग्राहक डिलीट", edit: "एडिट", delete: "डिलीट", editLoan: "लोन एडिट"
+        },
+        en: {
+            loginTitle: "HLB FINANCE", loginSub: "Powered By Hindu Lion Brothers", loginText: "Login", loginBtn: "Login",
+            statsTitle: "Information", statTotalLoanLabel: "Total", statTotalReceivedLabel: "Received", statTotalFineLabel: "Fine",
+            statTotalRemainingLabel: "Due", statTodayLabel: "Today", statMonthLabel: "Month", viewBtn: "View",
+            newCollectionTitle: "New Collection", customerNameLabel: "Customer", loanSelectLabel: "Select Loan", amountLabel: "Amount", dateLabel: "Date", addCollectionBtn: "Add",
+            datePickerTitle: "Select Date", showDateBtn: "Show", backupTitle: "Backup", downloadJsonBtn: "JSON", downloadExcelBtn: "Excel",
+            restoreBtn: "Restore", restoreInfo: "Restore from JSON", ledgerTitle: "Ledger", searchTitle: "Search",
+            officerListTitle: "Officers", newOfficerTitle: "New Officer", createOfficerBtn: "Create",
+            newCustomerTitle: "New Customer", createCustomerBtn: "Create", newLoanTitle: "New Loan", loanDateLabel: "Loan Date",
+            loanTypeLabel: "Type", dayLoanOption: "Daily", monthLoanOption: "Monthly", principalLabel: "Principal",
+            daysLabel: "Days", interestLabel: "Interest", perDayLabel: "Per Day", monthInterestLabel: "Rate (%)", createLoanBtn: "Create",
+            activeLoanTitle: "Active Loans", thCustomer: "Customer", thPrincipal: "Principal", thInterest: "Interest", thTotal: "Total", thRemaining: "Due", thPerDay: "Per Day", thAction: "Action",
+            details: "Details", print: "Print", payment: "Payment", fine: "Fine", discount: "Discount", deleteLoan: "Delete Loan", deleteCustomer: "Delete Customer", edit: "Edit", delete: "Delete", editLoan: "Edit Loan"
+        }
+    };
+    
+    function changeLanguage() {
+        currentLang = document.getElementById('languageSelect').value;
+        for (let key in translations[currentLang]) {
+            let element = document.getElementById(key);
+            if (element) element.innerText = translations[currentLang][key];
+        }
+        refreshUI();
+    }
+    function t(key) { return translations[currentLang][key] || key; }
+
+    function getTodayDate() { let d = new Date(); return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`; }
+    function getTodayDateForInput() { let d = new Date(); return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`; }
+    function getCurrentMonth() { return new Date().getMonth() + 1; }
+    function getCurrentYear() { return new Date().getFullYear(); }
+
+    // ========== IndexedDB Setup ==========
+    const DB_NAME = 'HLBFinanceDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'appData';
+    let db = null;
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            if (db) { resolve(db); return; }
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = function(e) {
+                const d = e.target.result;
+                if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME);
+            };
+            req.onsuccess = function(e) { db = e.target.result; resolve(db); };
+            req.onerror = function(e) { reject(e.target.error); };
+        });
+    }
+    function dbSet(key, value) {
+        return openDB().then(d => new Promise((resolve, reject) => {
+            const tx = d.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(value, key);
+            tx.oncomplete = resolve;
+            tx.onerror = e => reject(e.target.error);
+        }));
+    }
+    function dbGet(key) {
+        return openDB().then(d => new Promise((resolve, reject) => {
+            const req = d.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key);
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror = e => reject(e.target.error);
+        }));
+    }
+    function dbDelete(key) {
+        return openDB().then(d => new Promise((resolve, reject) => {
+            const tx = d.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(key);
+            tx.oncomplete = resolve;
+            tx.onerror = e => reject(e.target.error);
+        }));
+    }
+    // ========== End IndexedDB Setup ==========
+
+    function saveData() {
+        // Fire and forget - IndexedDB async hai lekin in-memory data turant update hai
+        // Isliye UI turant refresh hota hai, background mein save hota hai
+        Promise.all([
+            dbSet('loan_users', users),
+            dbSet('loan_officers', officers),
+            dbSet('loan_loans', loans),
+            dbSet('loan_ledger', ledger),
+            dbSet('loan_fines', fines)
+        ]).catch(err => console.error('saveData error:', err));
+    }
+
+    function loadData() {
+        openDB().then(() => Promise.all([
+            dbGet('loan_users'), dbGet('loan_officers'), dbGet('loan_loans'),
+            dbGet('loan_ledger'), dbGet('loan_fines'), dbGet('currentUser')
+        ])).then(([savedUsers, savedOfficers, savedLoans, savedLedger, savedFines, savedSession]) => {
+            if (savedUsers)    users    = savedUsers;
+            if (savedOfficers) officers = savedOfficers;
+            if (savedLoans)    loans    = savedLoans;
+            if (savedLedger)   ledger   = savedLedger;
+            if (savedFines)    fines    = savedFines;
+            if (savedSession) {
+                currentUser = savedSession;
+                if (currentUser.role === 'admin') {
+                    showDashboard();
+                } else if (currentUser.role === 'officer') {
+                    // Pehle ID se dhundo
+                    if (officers[currentUser.id]) {
+                        showDashboard();
+                    } else {
+                        // ID nahi mili to naam se dhundo (JSON restore ke baad)
+                        let found = null;
+                        for (let [id, off] of Object.entries(officers)) {
+                            if (off.name === currentUser.name) { found = id; break; }
+                        }
+                        if (found) {
+                            // ID update karo aur session save karo
+                            currentUser.id = found;
+                            currentUser.officerId = found;
+                            dbSet('currentUser', currentUser);
+                            showDashboard();
+                        } else {
+                            dbDelete('currentUser');
+                            currentUser = null;
+                        }
+                    }
+                } else {
+                    dbDelete('currentUser');
+                    currentUser = null;
+                }
+            }
+        }).catch(err => console.error('loadData error:', err));
+    }
+
+    function updateMonthCollection() {
+        const month = parseInt(document.getElementById('monthSelect').value);
+        const year = parseInt(document.getElementById('yearSelect').value);
+        let total = 0;
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.type === 'payment' || entry.type === 'direct' || entry.type === 'principal_payment') {
+                let parts = entry.date.split('/');
+                if (parts.length === 3 && parseInt(parts[1]) === month && parseInt(parts[2]) === year) total += entry.amount_paid;
+            }
+        }
+        document.getElementById('monthCollection').innerHTML = `₹${total.toLocaleString('en-IN')}`;
+    }
+
+    function updateStats() {
+        let totalLoanGiven = 0, totalReceived = 0, totalFine = 0, totalRemaining = 0, todayCollection = 0;
+        const today = getTodayDate();
+        for (let [id, loan] of Object.entries(loans)) {
+            totalLoanGiven += (loan.original_principal || loan.principal);
+            totalFine += (loan.total_fine || 0);
+            if (loan.status === 'active') totalRemaining += loan.remaining_amount;
+        }
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.type === 'payment' || entry.type === 'direct' || entry.type === 'principal_payment') {
+                totalReceived += entry.amount_paid;
+                if (entry.date === today) todayCollection += entry.amount_paid;
+            }
+        }
+        document.getElementById('totalLoanGiven').innerHTML = `₹${totalLoanGiven.toLocaleString('en-IN')}`;
+        document.getElementById('totalReceived').innerHTML = `₹${totalReceived.toLocaleString('en-IN')}`;
+        document.getElementById('totalFine').innerHTML = `₹${totalFine.toLocaleString('en-IN')}`;
+        document.getElementById('totalRemaining').innerHTML = `₹${totalRemaining.toLocaleString('en-IN')}`;
+        document.getElementById('todayCollection').innerHTML = `₹${todayCollection.toLocaleString('en-IN')}`;
+        document.getElementById('monthSelect').value = getCurrentMonth();
+        document.getElementById('yearSelect').value = getCurrentYear();
+        updateMonthCollection();
+    }
+
+    function checkMonthlyInterest() {
+        const today = new Date();
+        let changed = false;
+        for (let [id, loan] of Object.entries(loans)) {
+            if (loan.status !== 'active' || loan.type !== 'month') continue;
+            let parts = loan.last_month_check.split('/');
+            let lastCheck = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+            const daysDiff = Math.floor((today - lastCheck) / (1000 * 60 * 60 * 24));
+            if (daysDiff >= 30) {
+                const monthsPassed = Math.floor(daysDiff / 30);
+                // Sadharan byaj - current principal par (jo payment ke baad kam ho sakta hai)
+                const monthlyInterest = loan.principal * (loan.interest_rate / 100);
+                const totalInterestToAdd = monthlyInterest * monthsPassed;
+                loan.total_interest += totalInterestToAdd;
+                loan.total_amount += totalInterestToAdd;
+                loan.remaining_amount += totalInterestToAdd;
+                // Sirf poore mahine ka time update karo, baaki din carry forward
+                let newDate = new Date(lastCheck);
+                newDate.setDate(newDate.getDate() + (monthsPassed * 30));
+                loan.last_month_check = `${newDate.getDate().toString().padStart(2,'0')}/${(newDate.getMonth()+1).toString().padStart(2,'0')}/${newDate.getFullYear()}`;
+                loans[id] = loan;
+                changed = true;
+            }
+        }
+        if (changed) saveData();
+    }
+
+    function checkLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        if (username.toLowerCase() === 'hindu' && password === 'Lion') {
+            currentUser = { id: 'admin', name: 'हिंदू', role: 'admin', officerId: null, password: 'Lion' };
+            dbSet('currentUser', currentUser);
+            showDashboard(); return;
+        }
+        for (let [id, officer] of Object.entries(officers)) {
+            if (officer.name.trim() === username && officer.password.trim() === password) {
+                currentUser = { id: id, name: officer.name, role: 'officer', officerId: id, password: officer.password };
+                dbSet('currentUser', currentUser);
+                showDashboard(); return;
+            }
+        }
+        document.getElementById('loginError').innerText = '❌ गलत यूजरनेम या पासवर्ड!';
+    }
+
+    function showDashboard() {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        
+        // Set custom branding for officer
+        if (currentUser.role === 'officer') {
+            let off = officers[currentUser.id];
+            if (off && off.print_company_name) document.getElementById('dashboardCompanyName').innerText = off.print_company_name;
+            else document.getElementById('dashboardCompanyName').innerText = 'HLB FINANCE';
+            if (off && off.print_tagline) document.getElementById('dashboardTagline').innerText = off.print_tagline;
+            else document.getElementById('dashboardTagline').innerText = 'Powered By Hindu Lion Brothers';
+        } else {
+            document.getElementById('dashboardCompanyName').innerText = 'HLB FINANCE';
+            document.getElementById('dashboardTagline').innerText = 'Powered By Hindu Lion Brothers';
+        }
+        
+        document.getElementById('userRoleBadge').innerText = currentUser.role === 'admin' ? 'एडमिन' : 'लोन ऑफिसर';
+        document.getElementById('userNameDisplay').innerText = currentUser.name;
+        if (currentUser.role === 'admin') {
+            document.getElementById('officerListCard').classList.remove('hidden');
+            document.getElementById('newLoanCard').classList.add('hidden');
+            document.getElementById('newCustomerCard').classList.remove('hidden');
+            refreshOfficerList();
+        } else {
+            document.getElementById('officerListCard').classList.add('hidden');
+            document.getElementById('newLoanCard').classList.remove('hidden');
+            document.getElementById('newCustomerCard').classList.remove('hidden');
+        }
+        document.getElementById('collectionDate').value = getTodayDateForInput();
+        document.getElementById('loanStartDate').value = getTodayDateForInput();
+        refreshUI();
+        initMobileTabs();
+    }
+
+    function logout() { dbDelete('currentUser').finally(() => { currentUser = null; location.reload(); }); }
+
+    function toggleLoanType() {
+        const type = document.getElementById('loanType').value;
+        if (type === 'day') {
+            document.getElementById('dayOptionsDiv').classList.remove('hidden');
+            document.getElementById('monthOptionsDiv').classList.add('hidden');
+            calculateDayLoan();
+        } else {
+            document.getElementById('dayOptionsDiv').classList.add('hidden');
+            document.getElementById('monthOptionsDiv').classList.remove('hidden');
+        }
+    }
+
+    function calculateDayLoan() {
+        const principal = parseFloat(document.getElementById('loanPrincipal').value) || 0;
+        const interest = principal * 0.2;
+        document.getElementById('loanDayInterest').value = interest.toFixed(2);
+        const days = parseInt(document.getElementById('loanDays').value);
+        document.getElementById('loanPerDay').value = ((principal + interest) / days).toFixed(2);
+    }
+
+    function createOfficer() {
+        if (currentUser.role !== 'admin') return;
+        const name = document.getElementById('officerName').value;
+        const password = document.getElementById('officerPassword').value;
+        const mobile = document.getElementById('officerMobile').value;
+        const printName = document.getElementById('officerPrintName').value;
+        const tagline = document.getElementById('officerTagline').value;
+        if (!name || !password) { alert('नाम और पासवर्ड भरें!'); return; }
+        if (password.length < 3) { alert('पासवर्ड कम से कम 3 अक्षर का हो!'); return; }
+        for (let [id, off] of Object.entries(officers)) if (off.name === name) { alert('इस नाम से कोई लोन ऑफिसर पहले से है!'); return; }
+        const id = Date.now().toString();
+        officers[id] = { name, password, mobile, created_date: getTodayDate(), print_company_name: printName, print_tagline: tagline };
+        saveData();
+        alert('✅ लोन ऑफिसर बन गया!');
+        document.getElementById('officerName').value = '';
+        document.getElementById('officerPassword').value = '';
+        document.getElementById('officerMobile').value = '';
+        document.getElementById('officerPrintName').value = '';
+        document.getElementById('officerTagline').value = '';
+        refreshOfficerList();
+    }
+
+    function editOfficer(officerId) {
+        let off = officers[officerId];
+        if (!off) return;
+        let newName = prompt('नया नाम', off.name);
+        if (newName) off.name = newName;
+        let newPass = prompt('नया पासवर्ड', off.password);
+        if (newPass && newPass.length >= 3) off.password = newPass;
+        let newMobile = prompt('मोबाइल', off.mobile || '');
+        off.mobile = newMobile;
+        let newPrintName = prompt('प्रिंट में कंपनी का नाम (खाली छोड़ सकते हैं)', off.print_company_name || '');
+        off.print_company_name = newPrintName || '';
+        let newTagline = prompt('प्रिंट में टैगलाइन', off.print_tagline || '');
+        off.print_tagline = newTagline || '';
+        saveData();
+        refreshOfficerList();
+        if (currentUser.role === 'officer' && currentUser.id === officerId) {
+            // update dashboard header
+            document.getElementById('dashboardCompanyName').innerText = off.print_company_name || 'HLB FINANCE';
+            document.getElementById('dashboardTagline').innerText = off.print_tagline || 'Powered By Hindu Lion Brothers';
+        }
+        refreshUI();
+    }
+
+    function downloadOfficerBackup(officerId) {
+        let officer = officers[officerId];
+        if (!officer) return;
+        // Get all customers of this officer
+        let customerIds = [];
+        let officerCustomers = {};
+        for (let [uid, u] of Object.entries(users)) {
+            if (u.officer_id === officerId) {
+                customerIds.push(uid);
+                officerCustomers[uid] = u;
+            }
+        }
+        // Get loans of these customers
+        let officerLoans = {};
+        for (let [lid, l] of Object.entries(loans)) {
+            if (customerIds.includes(l.user_id)) officerLoans[lid] = l;
+        }
+        // Get ledger entries
+        let officerLedger = {};
+        for (let [lid, e] of Object.entries(ledger)) {
+            if (customerIds.includes(e.user_id)) officerLedger[lid] = e;
+        }
+        // Get fines
+        let officerFines = {};
+        for (let [fid, f] of Object.entries(fines)) {
+            if (customerIds.includes(f.user_id)) officerFines[fid] = f;
+        }
+        let backupData = {
+            officers: { [officerId]: officer },
+            users: officerCustomers,
+            loans: officerLoans,
+            ledger: officerLedger,
+            fines: officerFines
+        };
+        let blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Officer_${officer.name}_Backup_${getTodayDate().replace(/\//g, '-')}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        alert('✅ ऑफिसर का बैकअप डाउनलोड हो गया!');
+    }
+
+    function deleteOfficer(officerId, officerName) {
+        if (!confirm(`क्या आप "${officerName}" को डिलीट करना चाहते हैं?`)) return;
+        let customerIds = [];
+        for (let [userId, user] of Object.entries(users)) if (user.officer_id === officerId) customerIds.push(userId);
+        for (let userId of customerIds) {
+            for (let [loanId, loan] of Object.entries(loans)) if (loan.user_id === userId) delete loans[loanId];
+            for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.user_id === userId) delete ledger[ledgerId];
+            for (let [fineId, fine] of Object.entries(fines)) if (fine.user_id === userId) delete fines[fineId];
+            delete users[userId];
+        }
+        delete officers[officerId];
+        saveData();
+        refreshOfficerList();
+        refreshUI();
+        alert(`✅ "${officerName}" और उसके सभी ग्राहक, लोन, कलेक्शन डिलीट हो गए!`);
+    }
+
+    function refreshOfficerList() {
+        const div = document.getElementById('officerListDiv');
+        if (!div) return;
+        if (Object.keys(officers).length === 0) { div.innerHTML = '<p>कोई लोन ऑफिसर नहीं</p>'; return; }
+        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></tr></thead><tbody>';
+        for (let [id, off] of Object.entries(officers)) {
+            html += `<tr>
+                        <td>${off.name}</td>
+                        <td>${off.password}</td>
+                        <td>${off.mobile || '-'}</td>
+                        <td>${off.print_company_name || '-'}</td>
+                        <td>${off.print_tagline || '-'}</td>
+                        <td class="btn-group">
+                            <button class="edit-officer small" onclick="editOfficer('${id}')">✏️</button>
+                            <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
+                            <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
+                        </td>
+                    </tr>`;
+        }
+        html += '</tbody></table>';
+        div.innerHTML = html;
+    }
+
+    function createCustomer() {
+        const name = document.getElementById('customerName').value;
+        const mobile = document.getElementById('customerMobile').value;
+        const address = document.getElementById('customerAddress').value;
+        if (!name || !mobile || !address) { alert('नाम, मोबाइल, पता भरें!'); return; }
+        users[Date.now().toString()] = { name, mobile, address, officer_id: currentUser.officerId, created_date: getTodayDate() };
+        saveData();
+        refreshUI();
+        document.getElementById('customerName').value = '';
+        document.getElementById('customerMobile').value = '';
+        document.getElementById('customerAddress').value = '';
+        alert('✅ ग्राहक बन गया!');
+    }
+
+    function createLoan() {
+        let userId = selectedLoanCustomerId;
+        if (!userId) userId = document.getElementById('loanCustomerSelect').value;
+        if (!userId) { alert('ग्राहक चुनें!'); return; }
+        const type = document.getElementById('loanType').value;
+        const principal = parseFloat(document.getElementById('loanPrincipal').value);
+        let startDateStr = document.getElementById('loanStartDate').value;
+        if (!startDateStr) startDateStr = getTodayDateForInput();
+        let parts = startDateStr.split('-');
+        let displayStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        if (type === 'day') {
+            const days = parseInt(document.getElementById('loanDays').value);
+            const totalInterest = principal * 0.2;
+            const totalAmount = principal + totalInterest;
+            const perDay = totalAmount / days;
+            let lastDateObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+            lastDateObj.setDate(lastDateObj.getDate() + days);
+            let lastDate = `${lastDateObj.getDate().toString().padStart(2,'0')}/${(lastDateObj.getMonth()+1).toString().padStart(2,'0')}/${lastDateObj.getFullYear()}`;
+            loans[Date.now().toString()] = {
+                user_id: userId, user_name: users[userId].name, officer_id: currentUser.officerId,
+                type: 'day', principal, original_principal: principal, interest_rate: 20, total_interest: totalInterest,
+                total_amount: totalAmount, remaining_amount: totalAmount, per_day: perDay,
+                start_date: displayStartDate, last_date: lastDate, days: days,
+                status: 'active', total_fine: 0, total_discount: 0
+            };
+        } else {
+            const monthRate = parseFloat(document.getElementById('loanMonthInterest').value);
+            // Loan create hote waqt byaj 0 — pehla byaj 30 din baad lagega
+            loans[Date.now().toString()] = {
+                user_id: userId, user_name: users[userId].name, officer_id: currentUser.officerId,
+                type: 'month', principal, original_principal: principal, interest_rate: monthRate,
+                total_interest: 0, total_amount: principal, remaining_amount: principal,
+                per_day: null, start_date: displayStartDate, last_date: null, days: null,
+                status: 'active', last_month_check: displayStartDate,
+                total_fine: 0, total_discount: 0
+            };
+        }
+        saveData();
+        refreshUI();
+        alert('✅ लोन बन गया!');
+    }
+
+    function updateCollectionLoanSelect() {
+        const name = document.getElementById('collectionNameInput').value;
+        const select = document.getElementById('collectionLoanSelect');
+        if (!name) { select.innerHTML = '<option value="">पहले ग्राहक चुनें</option>'; return; }
+        let userId = null;
+        for (let [id, u] of Object.entries(users)) {
+            if (u.name === name && u.officer_id === currentUser.officerId) { userId = id; break; }
+        }
+        if (!userId) { select.innerHTML = '<option value="new">बिना लोन (नया ग्राहक)</option>'; return; }
+        let activeLoans = [];
+        for (let [id, loan] of Object.entries(loans)) {
+            if (loan.user_id === userId && loan.status === 'active') activeLoans.push({id, loan});
+        }
+        if (activeLoans.length === 0) {
+            select.innerHTML = '<option value="new">बिना लोन (कोई एक्टिव लोन नहीं)</option>';
+        } else {
+            let html = '';
+            for (let item of activeLoans) {
+                let loanTypeText = item.loan.type === 'day' ? 'दिन वाला' : 'महीने वाला';
+                html += `<option value="${item.id}">${loanTypeText} - तारीख: ${item.loan.start_date} - बाकी: ₹${item.loan.remaining_amount}</option>`;
+            }
+            select.innerHTML = html;
+        }
+    }
+
+    function addDirectCollection() {
+        const name = document.getElementById('collectionNameInput').value;
+        const loanId = document.getElementById('collectionLoanSelect').value;
+        const amount = parseFloat(document.getElementById('collectionAmount').value);
+        const dateInput = document.getElementById('collectionDate').value;
+        if (!name || !amount || amount <= 0 || !dateInput) { alert('नाम, राशि और तारीख डालें!'); return; }
+        let parts = dateInput.split('-');
+        let displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        let userId = null;
+        for (let [id, u] of Object.entries(users)) {
+            if (u.name === name && u.officer_id === currentUser.officerId) { userId = id; break; }
+        }
+        if (!userId) {
+            userId = Date.now().toString();
+            users[userId] = { name, mobile: '', address: '', officer_id: currentUser.officerId, created_date: getTodayDate() };
+        }
+        const ledgerId = Date.now().toString();
+        if (loanId !== 'new' && loans[loanId]) {
+            const loan = loans[loanId];
+            const oldRemaining = loan.remaining_amount;
+            const newRemaining = oldRemaining - amount;
+
+            // Month loan mein pehle byaj, baad mein muldhan
+            if (loan.type === 'month') {
+                const pendingInterest = Math.max(0, loan.remaining_amount - loan.principal);
+                if (amount > pendingInterest) {
+                    const principalPaid = amount - pendingInterest;
+                    loan.principal = Math.max(0, loan.principal - principalPaid);
+                }
+            }
+
+            loan.remaining_amount = newRemaining > 0 ? newRemaining : 0;
+            if (newRemaining <= 0) { loan.status = 'completed'; loan.principal = 0; }
+            loans[loanId] = loan;
+            ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: userId, user_name: name, officer_id: currentUser.officerId, date: displayDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: 0 };
+        } else {
+            ledger[ledgerId] = { id: ledgerId, loan_id: null, user_id: userId, user_name: name, officer_id: currentUser.officerId, date: displayDate, amount_paid: amount, old_balance: null, new_balance: null, type: 'direct', discount: 0 };
+        }
+        saveData();
+        refreshUI();
+        document.getElementById('collectionNameInput').value = '';
+        document.getElementById('collectionLoanSelect').innerHTML = '<option value="">पहले ग्राहक चुनें</option>';
+        document.getElementById('collectionAmount').value = '';
+        alert('✅ कलेक्शन जुड़ गया!');
+    }
+
+    function openPaymentModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        document.getElementById('paymentLoanId').value = loanId;
+        document.getElementById('paymentUserName').innerText = loan.user_name;
+        document.getElementById('paymentRemaining').innerText = loan.remaining_amount;
+        document.getElementById('paymentAmount').value = '';
+        document.getElementById('discountAmount').value = '0';
+        document.getElementById('paymentDate').value = getTodayDateForInput();
+        document.getElementById('principalPaymentCheck').checked = false;
+        // Sirf month wale loan ke liye principal option dikhao
+        document.getElementById('principalPaymentCheck').closest('.form-group').style.display = loan.type === 'month' ? 'block' : 'none';
+        document.getElementById('paymentModal').style.display = 'flex';
+    }
+    function closePaymentModal() { document.getElementById('paymentModal').style.display = 'none'; }
+
+    function addPaymentWithDiscount() {
+        const loanId = document.getElementById('paymentLoanId').value;
+        let amount = parseFloat(document.getElementById('paymentAmount').value);
+        const discount = parseFloat(document.getElementById('discountAmount').value) || 0;
+        const isPrincipalPayment = document.getElementById('principalPaymentCheck').checked;
+        const dateInput = document.getElementById('paymentDate').value;
+        const loan = loans[loanId];
+        if (!loan || amount <= 0) { alert('सही राशि डालें!'); return; }
+
+        // Date convert
+        let paymentDate = getTodayDate();
+        if (dateInput) {
+            const p = dateInput.split('-');
+            paymentDate = `${p[2]}/${p[1]}/${p[0]}`;
+        }
+
+        // Discount pehle apply karo
+        if (discount > 0) {
+            if (discount > loan.remaining_amount) { alert('डिस्काउंट बाकी राशि से ज्यादा नहीं हो सकता!'); return; }
+            loan.total_discount = (loan.total_discount || 0) + discount;
+            loan.total_amount -= discount;
+            loan.remaining_amount -= discount;
+        }
+
+        if (amount > loan.remaining_amount) { alert(`बाकी राशि से ज्यादा नहीं डाल सकते! बाकी: ₹${loan.remaining_amount}`); return; }
+
+        const oldRemaining = loan.remaining_amount;
+        let principalPaidMsg = '';
+
+        if (isPrincipalPayment && loan.type === 'month') {
+            // Seedha muldhan mein jama
+            // total_interest aur total_amount NAHI badlega — purana hisab same rahega
+            // Sirf principal kam hoga aur remaining kam hoga
+            const oldPrincipal = loan.principal;
+            loan.principal = Math.max(0, loan.principal - amount);
+            loan.remaining_amount = Math.max(0, loan.remaining_amount - amount);
+            // Aage ka byaj naye principal par lagega
+            loan.last_month_check = paymentDate;
+
+            const ledgerId = Date.now().toString();
+            ledger[ledgerId] = {
+                id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name,
+                officer_id: currentUser.officerId, date: paymentDate,
+                amount_paid: amount, old_balance: oldRemaining,
+                new_balance: loan.remaining_amount,
+                type: 'principal_payment', discount: discount,
+                old_principal: oldPrincipal,
+                new_principal: loan.principal
+            };
+            if (loan.remaining_amount <= 0) { loan.status = 'completed'; loan.principal = 0; }
+            loans[loanId] = loan;
+            principalPaidMsg = `\n✅ मूलधन में जमा\nनया मूलधन: ₹${loan.principal.toFixed(2)}\nअगले माह ब्याज: ₹${(loan.principal * loan.interest_rate / 100).toFixed(2)}`;
+            if (discount > 0) alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
+            saveData(); refreshUI(); closePaymentModal();
+            alert(`💰 ₹${amount} मूलधन में जमा! (${paymentDate})\nबचा: ₹${loan.remaining_amount.toFixed(2)}${principalPaidMsg}`);
+            return; // Yahan se return — niche ka common code nahi chalega
+
+        } else if (loan.type === 'month') {
+            // Normal: pehle byaj, baad mein muldhan
+            const pendingInterest = Math.max(0, loan.remaining_amount - loan.principal);
+            let principalPaid = 0;
+            if (amount > pendingInterest) {
+                principalPaid = amount - pendingInterest;
+                loan.principal = Math.max(0, loan.principal - principalPaid);
+            }
+            principalPaidMsg = `\nनया मूलधन: ₹${loan.principal.toFixed(2)}\nअगले माह ब्याज: ₹${(loan.principal * loan.interest_rate / 100).toFixed(2)}`;
+        }
+
+        const newRemaining = oldRemaining - amount;
+        loan.remaining_amount = newRemaining > 0 ? newRemaining : 0;
+        if (newRemaining <= 0) { loan.status = 'completed'; loan.principal = 0; }
+        loans[loanId] = loan;
+
+        const ledgerId = Date.now().toString();
+        ledger[ledgerId] = {
+            id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name,
+            officer_id: currentUser.officerId, date: paymentDate,
+            amount_paid: amount, old_balance: oldRemaining,
+            new_balance: newRemaining > 0 ? newRemaining : 0,
+            type: 'payment', discount: discount
+        };
+
+        if (discount > 0) alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
+        saveData();
+        refreshUI();
+        closePaymentModal();
+        alert(`💰 ₹${amount} जमा! (${paymentDate})\nबचा: ₹${newRemaining > 0 ? newRemaining.toFixed(2) : 0}${principalPaidMsg}`);
+    }
+
+    function openDiscountModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        document.getElementById('discountLoanId').value = loanId;
+        document.getElementById('discountUserName').innerText = loan.user_name;
+        document.getElementById('discountRemaining').innerText = loan.remaining_amount;
+        document.getElementById('discountGiveAmount').value = '';
+        document.getElementById('discountModal').style.display = 'flex';
+    }
+    function closeDiscountModal() { document.getElementById('discountModal').style.display = 'none'; }
+
+    function addDiscount() {
+        const loanId = document.getElementById('discountLoanId').value;
+        const discount = parseFloat(document.getElementById('discountGiveAmount').value);
+        const loan = loans[loanId];
+        if (!loan || discount <= 0) { alert('सही डिस्काउंट राशि डालें!'); return; }
+        if (discount > loan.remaining_amount) { alert('डिस्काउंट बाकी राशि से ज्यादा नहीं हो सकता!'); return; }
+        loan.total_discount = (loan.total_discount || 0) + discount;
+        loan.total_amount -= discount;
+        loan.remaining_amount -= discount;
+        if (loan.remaining_amount <= 0) loan.status = 'completed';
+        loans[loanId] = loan;
+        const ledgerId = Date.now().toString();
+        ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount_paid: 0, old_balance: loan.remaining_amount + discount, new_balance: loan.remaining_amount, type: 'discount', discount: discount };
+        saveData();
+        refreshUI();
+        closeDiscountModal();
+        alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
+    }
+
+    function openEditPayment(ledgerId) {
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        document.getElementById('editPaymentId').value = ledgerId;
+        document.getElementById('editLoanId').value = entry.loan_id || '';
+        document.getElementById('editCustomerName').value = entry.user_name;
+        document.getElementById('editAmount').value = entry.amount_paid;
+        let parts = entry.date.split('/');
+        document.getElementById('editDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        document.getElementById('editPaymentModal').style.display = 'flex';
+    }
+    function closeEditPaymentModal() { document.getElementById('editPaymentModal').style.display = 'none'; }
+
+    function saveEditPayment() {
+        const ledgerId = document.getElementById('editPaymentId').value;
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        const newAmount = parseFloat(document.getElementById('editAmount').value);
+        const newDateInput = document.getElementById('editDate').value;
+        const newName = document.getElementById('editCustomerName').value;
+        let parts = newDateInput.split('-');
+        let newDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        if (entry.loan_id && loans[entry.loan_id]) {
+            const loan = loans[entry.loan_id];
+            const diff = newAmount - entry.amount_paid;
+            loan.remaining_amount -= diff;
+            if (loan.remaining_amount <= 0) { loan.status = 'completed'; loan.remaining_amount = 0; }
+            else loan.status = 'active';
+            loans[entry.loan_id] = loan;
+            entry.new_balance = loan.remaining_amount;
+        }
+        entry.amount_paid = newAmount;
+        entry.date = newDate;
+        entry.user_name = newName;
+        ledger[ledgerId] = entry;
+        saveData();
+        refreshUI();
+        closeEditPaymentModal();
+        alert('✅ एडिट हो गया!');
+    }
+
+    function deletePayment() {
+        const ledgerId = document.getElementById('editPaymentId').value;
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        if (confirm('क्या आप इस पेमेंट को डिलीट करना चाहते हैं?')) {
+            if (entry.loan_id && loans[entry.loan_id]) {
+                const loan = loans[entry.loan_id];
+                if (entry.type === 'principal_payment') {
+                    // Muldhan payment delete — principal wapas restore karo
+                    loan.principal = Math.min(loan.original_principal || loan.principal, loan.principal + entry.amount_paid);
+                    loan.total_amount += entry.amount_paid;
+                    loan.remaining_amount += entry.amount_paid;
+                } else {
+                    // Normal payment delete
+                    loan.remaining_amount += entry.amount_paid;
+                    if (entry.discount) { loan.total_discount -= entry.discount; loan.total_amount += entry.discount; }
+                    // Month loan mein principal bhi restore karo
+                    if (loan.type === 'month') {
+                        const pendingInterestAfter = Math.max(0, loan.remaining_amount - loan.principal);
+                        const wasInterest = Math.min(entry.amount_paid, loan.total_interest);
+                        const wasPrincipal = Math.max(0, entry.amount_paid - wasInterest);
+                        if (wasPrincipal > 0) loan.principal = Math.min(loan.original_principal || loan.principal + wasPrincipal, loan.principal + wasPrincipal);
+                    }
+                }
+                if (loan.remaining_amount > 0) loan.status = 'active';
+                loans[entry.loan_id] = loan;
+            }
+            delete ledger[ledgerId];
+            saveData();
+            refreshUI();
+            closeEditPaymentModal();
+            alert('🗑️ पेमेंट डिलीट हो गया!');
+        }
+    }
+
+    function openOverdueModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan || loan.type !== 'day') { alert('ओवरड्यू सिर्फ दिन वाले लोन के लिए!'); return; }
+        document.getElementById('overdueLoanId').value = loanId;
+        document.getElementById('overdueUserName').innerText = loan.user_name;
+        document.getElementById('overdueRemaining').innerText = loan.remaining_amount;
+        document.getElementById('overdueAmount').value = '';
+        document.getElementById('overdueModal').style.display = 'flex';
+    }
+    function closeOverdueModal() { document.getElementById('overdueModal').style.display = 'none'; }
+
+    function addOverdue() {
+        const loanId = document.getElementById('overdueLoanId').value;
+        const extra = parseFloat(document.getElementById('overdueAmount').value);
+        const loan = loans[loanId];
+        if (!loan || extra <= 0) { alert('सही राशि डालें!'); return; }
+        loan.total_interest += extra;
+        loan.total_amount += extra;
+        loan.remaining_amount += extra;
+        loan.total_fine = (loan.total_fine || 0) + extra;
+        loans[loanId] = loan;
+        const fineId = Date.now().toString();
+        fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
+        saveData();
+        refreshUI();
+        closeOverdueModal();
+        alert('✅ फाइन ₹' + extra + ' ग्राहक के खाते में जुड़ गया!');
+    }
+
+    function openEditLoanModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        document.getElementById('editLoanId').value = loanId;
+        document.getElementById('editInterestRate').value = loan.interest_rate;
+        document.getElementById('editPrincipal').value = loan.principal;
+        let parts = loan.start_date.split('/');
+        document.getElementById('editLoanDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        document.getElementById('editLoanModal').style.display = 'flex';
+    }
+    function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
+
+    function recalculateRemaining() {
+        const loanId = document.getElementById('editLoanId').value;
+        const loan = loans[loanId];
+        if (!loan) return;
+        // Saari payments ka total nikalo
+        let totalPaid = 0;
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct' || entry.type === 'principal_payment')) {
+                totalPaid += entry.amount_paid;
+            }
+        }
+        // Remaining = total_amount - totalPaid
+        const newRemaining = loan.total_amount - totalPaid;
+        loan.remaining_amount = newRemaining > 0 ? newRemaining : 0;
+        if (newRemaining <= 0) loan.status = 'completed';
+        else loan.status = 'active';
+        loans[loanId] = loan;
+        saveData();
+        refreshUI();
+        closeEditLoanModal();
+        alert(`✅ Remaining ठीक हो गया!\nकुल जमा: ₹${totalPaid.toLocaleString('en-IN')}\nनया बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}`);
+    }
+
+    function saveEditLoan() {
+        const loanId = document.getElementById('editLoanId').value;
+        const loan = loans[loanId];
+        if (!loan) return;
+        const newInterestRate = parseFloat(document.getElementById('editInterestRate').value);
+        const newPrincipal = parseFloat(document.getElementById('editPrincipal').value);
+        const newStartDateInput = document.getElementById('editLoanDate').value;
+        let parts = newStartDateInput.split('-');
+        let newStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        let totalPaid = 0;
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct' || entry.type === 'principal_payment')) {
+                totalPaid += entry.amount_paid;
+            }
+        }
+        if (loan.type === 'day') {
+            const newTotalInterest = newPrincipal * 0.2;
+            const newTotalAmount = newPrincipal + newTotalInterest;
+            const newPerDay = newTotalAmount / loan.days;
+            loan.original_principal = loan.original_principal || newPrincipal;
+            loan.principal = newPrincipal;
+            loan.interest_rate = 20;
+            loan.total_interest = newTotalInterest;
+            loan.total_amount = newTotalAmount;
+            loan.remaining_amount = newTotalAmount - totalPaid;
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
+            loan.per_day = newPerDay;
+            loan.start_date = newStartDate;
+            let lastDateObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+            lastDateObj.setDate(lastDateObj.getDate() + loan.days);
+            loan.last_date = `${lastDateObj.getDate().toString().padStart(2,'0')}/${(lastDateObj.getMonth()+1).toString().padStart(2,'0')}/${lastDateObj.getFullYear()}`;
+        } else {
+            const startDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+            const todayDate = new Date();
+            // 30-din wala logic
+            const daysDiff = Math.floor((todayDate - startDate) / (1000 * 60 * 60 * 24));
+            const monthsPassed = Math.max(0, Math.floor(daysDiff / 30));
+            const newTotalInterest = newPrincipal * (newInterestRate / 100) * monthsPassed;
+            const newTotalAmount = newPrincipal + newTotalInterest;
+            loan.original_principal = loan.original_principal || newPrincipal;
+            loan.principal = newPrincipal;
+            loan.interest_rate = newInterestRate;
+            loan.total_interest = newTotalInterest;
+            loan.total_amount = newTotalAmount;
+            loan.remaining_amount = newTotalAmount - totalPaid;
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
+            loan.start_date = newStartDate;
+            // last_month_check aaj set karo - taaki checkMonthlyInterest dobara byaj na jode
+            const todayStr = getTodayDate();
+            loan.last_month_check = todayStr;
+            loan.month_interest_added = monthsPassed;
+        }
+        loans[loanId] = loan;
+        saveData();
+        refreshUI();
+        closeEditLoanModal();
+        alert('✅ लोन अपडेट हो गया!');
+    }
+
+    function openDeleteLoanModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        if (!confirm(`क्या आप "${loan.user_name}" का लोन डिलीट करना चाहते हैं?`)) return;
+        for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.loan_id === loanId) delete ledger[ledgerId];
+        for (let [fineId, fine] of Object.entries(fines)) if (fine.loan_id === loanId) delete fines[fineId];
+        delete loans[loanId];
+        saveData();
+        refreshUI();
+        alert(`✅ लोन डिलीट हो गया!`);
+    }
+
+    function showCollectionByDate() {
+        const dateInput = document.getElementById('datePicker').value;
+        if (!dateInput) { alert('तारीख चुनें!'); return; }
+        let parts = dateInput.split('-');
+        let searchDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        let payments = Object.entries(ledger).filter(([id,e]) => e.date === searchDate && e.type !== 'fine');
+        if (currentUser.role === 'officer') payments = payments.filter(([id,e]) => e.officer_id === currentUser.officerId);
+        const div = document.getElementById('collectionList');
+        let total = 0;
+        for (let [id, p] of payments) total += p.amount_paid;
+        if (!payments.length) { div.innerHTML = '<p style="color:gray; text-align:center; padding:15px;">कोई कलेक्शन नहीं</p>'; return; }
+        let html = `<div class="sticky-header">कुल: ₹${total}</div><div>`;
+        for (let [id, p] of payments) {
+            let displayText = `₹${p.amount_paid}`;
+            if (p.discount) displayText += ` (${p.discount} छूट)`;
+            let customerName = p.user_name;
+            if (users[p.user_id] && users[p.user_id].address) customerName += ` (${users[p.user_id].address.substring(0, 15)})`;
+            const receiptBtn = p.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${p.loan_id}')">🧾</button>` : '';
+            html += `<div class="collection-item"><span><strong>${customerName}</strong></span><span>${displayText}</span><span>${p.date}</span><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${receiptBtn}</div>`;
+        }
+        html += '</div>';
+        div.innerHTML = html;
+    }
+
+    function setupLedgerSearch() {
+        const inp = document.getElementById('ledgerSearchInput');
+        const sug = document.getElementById('ledgerSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; document.getElementById('ledgerResult').innerHTML = ''; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="showCustomerLedger('${id}','${u.name}')">${u.name} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
+            else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function showCustomerLedger(userId, userName) {
+        document.getElementById('ledgerSearchInput').value = userName;
+        document.getElementById('ledgerSuggestions').style.display = 'none';
+        let customerLedger = Object.entries(ledger).filter(([id,e]) => e.user_id === userId);
+        customerLedger.sort((a,b) => b[0] - a[0]);
+        const div = document.getElementById('ledgerResult');
+        if (!customerLedger.length) { div.innerHTML = '<p>कोई लेन-देन नहीं</p>'; return; }
+        div.innerHTML = '';
+        for (let [id, e] of customerLedger) {
+            let displayText = '';
+            if (e.type === 'payment') { displayText = `जमा: ₹${e.amount_paid}`; if (e.discount) displayText += ` (${e.discount} छूट)`; }
+            else if (e.type === 'principal_payment') { displayText = `मूलधन जमा: ₹${e.amount_paid}`; }
+            else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
+            else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
+            let customerDisplay = e.user_name;
+            if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
+            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${e.date} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
+        }
+    }
+
+    function setupSearch() {
+        const inp = document.getElementById('searchInput');
+        const sug = document.getElementById('searchSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q) || u.mobile.includes(q));
+            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
+            else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function setupCollectionSearch() {
+        const inp = document.getElementById('collectionNameInput');
+        const sug = document.getElementById('collectionSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; updateCollectionLoanSelect(); return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) {
+                sug.style.display = 'block';
+                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCollectionCustomer('${u.name}')">${u.name} ${u.address ? '(' + u.address.substring(0, 20) + ')' : ''}</div>`).join('');
+            } else {
+                sug.style.display = 'none';
+                updateCollectionLoanSelect();
+            }
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function setupLoanSearch() {
+        const inp = document.getElementById('loanSearchInput');
+        const sug = document.getElementById('loanSearchSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) {
+                sug.style.display = 'block';
+                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectLoanCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '(' + u.address + ')' : ''}</div>`).join('');
+            } else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function selectLoanCustomer(userId, userName) {
+        document.getElementById('loanSearchInput').value = userName;
+        selectedLoanCustomerId = userId;
+        document.getElementById('loanCustomerSelect').value = '';
+        document.getElementById('loanSearchSuggestions').style.display = 'none';
+    }
+
+    function selectCustomer(userId, userName) {
+        document.getElementById('searchInput').value = userName;
+        document.getElementById('searchSuggestions').style.display = 'none';
+        const customerLoans = Object.entries(loans).filter(([id,l]) => l.user_id === userId);
+        const customer = users[userId];
+        let html = `<div style="background:#f0f2f5; padding:8px; border-radius:6px;"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;"><strong>${userName} ${customer.address ? '(' + customer.address.substring(0, 20) + ')' : ''}</strong><div style="display:flex;gap:4px;"><button class="small info" onclick="renameCustomer('${userId}')">✏️ नाम बदलें</button><button class="danger small" onclick="deleteCustomer('${userId}','${userName}')">${t('deleteCustomer')}</button></div></div>`;
+        if (!customerLoans.length) html += '<p style="padding:8px;">कोई लोन नहीं</p>';
+        else for (let [id, loan] of customerLoans) {
+            let loanTypeText = loan.type === 'day' ? 'दिन वाला' : 'महीने वाला';
+            html += `<div class="loan-card">
+                <div class="loan-line1">लोन तारीख: ${loan.start_date} | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal} | ब्याज: ₹${loan.total_interest}</div>
+                <div class="loan-line2">बाकी: ₹${loan.remaining_amount} | स्थिति: ${loan.status === 'active' ? 'एक्टिव' : 'पूरा'}</div>
+                <div class="loan-buttons">
+                    <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
+                    <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
+                    ${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
+                    ${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
+                    ${loan.status === 'active' && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
+                    ${currentUser.role === 'officer' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
+                    <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
+                    <button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button>
+                </div>
+            </div>`;
+        }
+        html += `</div>`;
+        document.getElementById('searchResult').innerHTML = html;
+    }
+
+    function deleteCustomer(userId, userName) {
+        if (!confirm(`क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?`)) return;
+        for (let [loanId, loan] of Object.entries(loans)) if (loan.user_id === userId) delete loans[loanId];
+        for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.user_id === userId) delete ledger[ledgerId];
+        for (let [fineId, fine] of Object.entries(fines)) if (fine.user_id === userId) delete fines[fineId];
+        delete users[userId];
+        saveData();
+        refreshUI();
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResult').innerHTML = '';
+        alert(`✅ "${userName}" पूरी तरह डिलीट हो गया!`);
+    }
+
+    function selectCollectionCustomer(name) {
+        document.getElementById('collectionNameInput').value = name;
+        document.getElementById('collectionSuggestions').style.display = 'none';
+        updateCollectionLoanSelect();
+    }
+
+    function printLoanDetails(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        const payments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'principal_payment'));
+        const finesList = Object.entries(fines).filter(([id,f]) => f.loan_id === loanId);
+        const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
+        const customer = users[loan.user_id] || {};
+        const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
+        let totalPaid = 0;
+        for (let [id, p] of payments) totalPaid += p.amount_paid;
+        
+        let companyName = officer.print_company_name || 'HLB FINANCE';
+        let tagline = officer.print_tagline || 'Powered By Hindu Lion Brothers';
+        
+        let paymentsSorted = [...payments].sort((a,b) => a[1].date.split('/').reverse().join().localeCompare(b[1].date.split('/').reverse().join()));
+        let col1 = [], col2 = [];
+        for (let i = 0; i < paymentsSorted.length; i++) {
+            if (i % 2 === 0) col1.push(paymentsSorted[i]);
+            else col2.push(paymentsSorted[i]);
+        }
+        
+        let finesSorted = [...finesList].sort((a,b) => a[1].date.split('/').reverse().join().localeCompare(b[1].date.split('/').reverse().join()));
+        let discountsSorted = [...discounts].sort((a,b) => a[1].date.split('/').reverse().join().localeCompare(b[1].date.split('/').reverse().join()));
+        
+        const html = `<!DOCTYPE html><html><head><title>लोन विवरण - ${loan.user_name}</title>
+        <style>@page{size:A4;margin:0.5cm}body{font-family:'Segoe UI',sans-serif;margin:0;padding:0;font-size:11pt}.print-container{width:100%}.header{text-align:left;margin-bottom:6px}.header h1{font-size:18pt;margin:0}.header .powered{font-size:9pt;color:#555}.customer-details{height:1.5in;border-bottom:2px solid #27ae60;margin-bottom:8px;padding:4px 6px}.detail-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:4px;font-size:10pt}.detail-item{min-width:180px}.loan-summary{background:#f5f5f5;padding:4px 6px;margin-top:4px;display:flex;flex-wrap:wrap;gap:12px;font-size:10pt}.payment-count{font-weight:bold;margin-top:4px}.section-title{font-size:12pt;margin:8px 0 4px 0;color:#27ae60;font-weight:bold}.two-columns{display:flex;gap:20px;flex-wrap:wrap}.payment-column{flex:1;min-width:200px}table{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:8px}th,td{border:1px solid #999;padding:4px 5px;text-align:left}th{background:#27ae60;color:white}.footer{margin-top:12px;font-size:8pt;text-align:center;border-top:1px dashed #ccc;padding-top:5px}</style>
+        </head><body><div class="print-container">
+        <div class="header"><h1>${companyName}</h1><div class="powered">${tagline}</div></div>
+        <div class="customer-details">
+            <div class="detail-row"><div class="detail-item"><strong>नाम:</strong> ${loan.user_name}</div><div class="detail-item"><strong>मोबाइल:</strong> ${customer.mobile || '-'}</div><div class="detail-item"><strong>पता:</strong> ${customer.address || '-'}</div></div>
+            <div class="detail-row"><div class="detail-item"><strong>Collection Agent:</strong> ${officer.name}</div><div class="detail-item"><strong>लोन तारीख:</strong> ${loan.start_date}</div><div class="detail-item"><strong>लास्ट डेट:</strong> ${loan.type === 'day' ? (loan.last_date || 'तय नहीं') : 'मासिक (कोई अंतिम तिथि नहीं)'}</div></div>
+            <div class="loan-summary"><span>प्रारंभिक मूलधन: ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}</span><span>वर्तमान मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</span><span>ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')}</span>${loan.total_fine ? `<span>फाइन: ₹${loan.total_fine.toLocaleString('en-IN')}</span>` : ''}${loan.total_discount ? `<span>डिस्काउंट: ₹${loan.total_discount.toLocaleString('en-IN')}</span>` : ''}<span>कुल: ₹${loan.total_amount.toLocaleString('en-IN')}</span><span>जमा: ₹${totalPaid.toLocaleString('en-IN')}</span><span><strong>बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></span></div>
+            <div class="payment-count">कुल पेमेंट्स: ${payments.length} बार</div>
+        </div>
+        <div class="transactions">
+            <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
+            <div class="two-columns"><div class="payment-column"><table><thead><tr><th>क्र.</th><th>तारीख</th><th>राशि (₹)</th></tr></thead><tbody>${col1.map(([id,p],idx)=>`<tr><td>${idx+1}</td><td>${p.date}</td><td class="text-right">${p.amount_paid.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length===0?'<tr><td colspan="3">कोई पेमेंट नहीं</td></tr>':''}</tbody></table></div>
+            <div class="payment-column"><table><thead><tr><th>क्र.</th><th>तारीख</th><th>राशि (₹)</th></tr></thead><tbody>${col2.map(([id,p],idx)=>`<tr><td>${col1.length+idx+1}</td><td>${p.date}</td><td class="text-right">${p.amount_paid.toLocaleString('en-IN')}</td></tr>`).join('')}${col2.length===0 && col1.length>0?'<tr><td colspan="3">-</td></tr>':''}</tbody></table></div></div>
+            ${(() => {
+                const principalChanges = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'principal_payment');
+                if (principalChanges.length === 0) return '';
+                principalChanges.sort((a,b) => a[1].date.split('/').reverse().join().localeCompare(b[1].date.split('/').reverse().join()));
+                return `<div class="section-title">▶ मूलधन परिवर्तन इतिहास</div><table style="width:60%"><thead><tr><th>क्र.</th><th>तारीख</th><th>पुराना मूलधन</th><th>जमा राशि</th><th>नया मूलधन</th></tr></thead><tbody>${principalChanges.map(([id,e],idx)=>`<tr><td>${idx+1}</td><td>${e.date}</td><td>₹${(e.old_principal||0).toLocaleString('en-IN')}</td><td>₹${e.amount_paid.toLocaleString('en-IN')}</td><td>₹${(e.new_principal||0).toLocaleString('en-IN')}</td></tr>`).join('')}</tbody></table>`;
+            })()}
+            ${finesSorted.length>0?`<div class="section-title">▶ फाइन</div><table style="width:50%"><thead><tr><th>क्र.</th><th>तारीख</th><th>राशि (₹)</th></tr></thead><tbody>${finesSorted.map(([id,f],idx)=>`<tr><td>${idx+1}</td><td>${f.date}</td><td class="text-right">${f.amount.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody></table>`:''}
+            ${discountsSorted.length>0?`<div class="section-title">▶ डिस्काउंट</div><table style="width:50%"><thead><tr><th>क्र.</th><th>तारीख</th><th>राशि (₹)</th></tr></thead><tbody>${discountsSorted.map(([id,d],idx)=>`<tr><td>${idx+1}</td><td>${d.date}</td><td class="text-right">${d.discount.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody></table>`:''}
+        </div>
+        <div class="footer">प्रिंट तिथि: ${getTodayDate()} | HLB Finance - Powered By Hindu Lion Brothers</div>
+        </div></body></html>`;
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.print();
+    }
+
+    function showLoanDetails(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        const payments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'principal_payment'));
+        const finesList = Object.entries(fines).filter(([id,f]) => f.loan_id === loanId);
+        const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
+        const customer = users[loan.user_id] || {};
+        const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
+        let totalPaid = 0;
+        for (let [id, p] of payments) totalPaid += p.amount_paid;
+        let all = [];
+        for (let [id, p] of payments) all.push({ 
+            date: p.date, 
+            amount: p.amount_paid, 
+            type: p.type === 'principal_payment' ? '🏦 मूलधन जमा' : 'पेमेंट', 
+            discount: p.discount || 0,
+            extra: p.type === 'principal_payment' && p.old_principal ? `(₹${p.old_principal.toLocaleString('en-IN')} → ₹${(p.new_principal||0).toLocaleString('en-IN')})` : ''
+        });
+        for (let [id, f] of finesList) all.push({ date: f.date, amount: f.amount, type: 'फाइन', discount: 0 });
+        for (let [id, d] of discounts) all.push({ date: d.date, amount: d.discount, type: 'डिस्काउंट', discount: 0 });
+        all.sort((a,b) => a.date.split('/').reverse().join().localeCompare(b.date.split('/').reverse().join()));
+        let rows = '';
+        for (let i = 0; i < all.length; i++) {
+            rows += `<tr><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
+        }
+        // totalDue = principal + byaj + fine - discount (current state)
+        // Din wale loan mein remaining_amount hi sahi bakaya hai
+        // Month wale mein bhi remaining_amount hi track karta hai
+        const totalDue = loan.remaining_amount + totalPaid; // actual total jo dena tha
+        const modalHtml = `<div><div style="background:#f5f5f5;padding:6px;margin-bottom:8px">
+        <strong>ग्राहक:</strong> ${loan.user_name}<br>
+        <strong>मोबाइल:</strong> ${customer.mobile || '-'}<br>
+        <strong>पता:</strong> ${customer.address || '-'}<br>
+        <strong>Collection Agent:</strong> ${officer.name}<br>
+        <strong>लोन तारीख:</strong> ${loan.start_date}<br>
+        <strong>लास्ट डेट:</strong> ${loan.type === 'day' ? (loan.last_date || 'तय नहीं') : 'मासिक (कोई अंतिम तिथि नहीं)'}<br>
+        <hr>
+        <strong>मूलधन (प्रारंभिक):</strong> ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}<br>
+        ${loan.type === 'month' && loan.original_principal && loan.original_principal !== loan.principal ? `<strong>मूलधन (वर्तमान):</strong> ₹${loan.principal.toLocaleString('en-IN')}<br>` : ''}
+        <strong>ब्याज (जोड़ा गया):</strong> ₹${loan.total_interest.toLocaleString('en-IN')}<br>
+        ${loan.total_fine ? `<strong>फाइन:</strong> ₹${loan.total_fine.toLocaleString('en-IN')}<br>` : ''}
+        ${loan.total_discount ? `<strong>डिस्काउंट:</strong> ₹${loan.total_discount.toLocaleString('en-IN')}<br>` : ''}
+        <hr>
+        <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
+        <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
+        <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th>राशि (₹)</th><th>छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td></tr>'}</tbody></table></div>`;
+        document.getElementById('detailsModalContent').innerHTML = modalHtml;
+        document.getElementById('detailsModal').style.display = 'flex';
+    }
+    function closeDetailsModal() { document.getElementById('detailsModal').style.display = 'none'; }
+
+    function openReceiptModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        const customer = users[loan.user_id] || {};
+        const officer = officers[loan.officer_id] || officers[currentUser.officerId] || {};
+        const loanPayments = Object.entries(ledger)
+            .filter(([id, e]) => e.loan_id === loanId && e.type === 'payment')
+            .sort((a, b) => b[0].localeCompare(a[0]));
+        if (loanPayments.length === 0) { alert('इस लोन पर अभी कोई पेमेंट नहीं है!'); return; }
+        const [lastId, lastPayment] = loanPayments[0];
+        showReceiptModal({
+            companyName: officer.print_company_name || 'HLB FINANCE',
+            tagline: officer.print_tagline || 'Powered By Hindu Lion Brothers',
+            officerName: officer.name || currentUser.name,
+            customerName: loan.user_name,
+            customerMobile: customer.mobile || '-',
+            loanType: loan.type === 'day' ? 'दिन वाला' : 'महीने वाला',
+            principal: loan.principal,
+            amountPaid: lastPayment.amount_paid,
+            discount: lastPayment.discount || 0,
+            oldBalance: lastPayment.old_balance,
+            newBalance: lastPayment.new_balance,
+            date: lastPayment.date,
+            receiptNo: lastId.slice(-6),
+            isCompleted: loan.status === 'completed'
+        });
+    }
+
+    function showReceiptModal(data) {
+        if (!data) { alert('कोई रसीद नहीं मिली!'); return; }
+        const html = `
+        <div class="receipt-slip" id="thermalReceipt">
+            <div class="r-center"><div class="r-title">${data.companyName}</div><div class="r-sub">${data.tagline}</div></div>
+            <div class="r-divider-double"></div>
+            <div class="r-center" style="font-size:10px;font-weight:bold;">भुगतान रसीद</div>
+            <div class="r-center" style="font-size:9px;color:#555;">Receipt No: #${data.receiptNo}</div>
+            <div class="r-divider"></div>
+            <div class="r-row"><span class="r-label">तारीख:</span><span>${data.date}</span></div>
+            <div class="r-row"><span class="r-label">ग्राहक:</span><span>${data.customerName}</span></div>
+            <div class="r-row"><span class="r-label">मोबाइल:</span><span>${data.customerMobile}</span></div>
+            <div class="r-row"><span class="r-label">Officer:</span><span>${data.officerName}</span></div>
+            <div class="r-divider"></div>
+            <div class="r-row"><span class="r-label">लोन टाइप:</span><span>${data.loanType}</span></div>
+            <div class="r-row"><span class="r-label">मूलधन:</span><span>₹${data.principal.toLocaleString('en-IN')}</span></div>
+            <div class="r-row"><span class="r-label">पुराना बाकी:</span><span>₹${(data.oldBalance||0).toLocaleString('en-IN')}</span></div>
+            <div class="r-divider"></div>
+            <div class="r-paid-stamp">✓ जमा</div>
+            <div class="r-amount">₹${data.amountPaid.toLocaleString('en-IN')}</div>
+            ${data.discount > 0 ? `<div class="r-row"><span class="r-label">छूट:</span><span>₹${data.discount.toLocaleString('en-IN')}</span></div>` : ''}
+            <div class="r-divider"></div>
+            <div class="r-row"><span class="r-label" style="font-weight:bold;">नया बाकी:</span><span style="font-weight:bold;font-size:13px;">₹${(data.newBalance||0).toLocaleString('en-IN')}</span></div>
+            ${data.isCompleted ? `<div class="r-paid-stamp" style="border-color:#2980b9;color:#2980b9;">✓ लोन पूर्ण</div>` : ''}
+            <div class="r-divider-double"></div>
+            <div class="r-footer">धन्यवाद! भुगतान के लिए आभार।</div>
+            <div class="r-footer">${data.companyName}</div>
+        </div>`;
+        document.getElementById('receiptContent').innerHTML = html;
+        document.getElementById('receiptModal').style.display = 'flex';
+    }
+
+    function printReceipt() {
+        const el = document.getElementById('thermalReceipt');
+        if (!el) return;
+        el.classList.add('receipt-print-area');
+        window.print();
+        setTimeout(() => el.classList.remove('receipt-print-area'), 1000);
+    }
+
+    function closeReceiptModal() { document.getElementById('receiptModal').style.display = 'none'; }
+
+    // ===== GITHUB GIST =====
+    const GIST_FILENAME = 'HLB_Finance_Backup.json';
+
+    function openGistModal() {
+        dbGet('gist_token').then(token => {
+            document.getElementById('gistTokenInput').value = token || '';
+        }).catch(() => {});
+        dbGet('gist_id').then(gistId => {
+            if (gistId) {
+                document.getElementById('gistIdDisplay').style.display = 'block';
+                document.getElementById('gistIdText').innerText = gistId;
+            }
+        }).catch(() => {});
+        document.getElementById('gistModal').style.display = 'flex';
+    }
+
+    function closeGistModal() { document.getElementById('gistModal').style.display = 'none'; }
+
+    function saveGistToken() {
+        const token = document.getElementById('gistTokenInput').value.trim();
+        if (!token) { alert('Token daalo!'); return; }
+        dbSet('gist_token', token).then(() => {
+            closeGistModal();
+            alert('✅ Token save ho gaya!\nAb "GitHub Gist Save" button use kar sakte hain.');
+        });
+    }
+
+    function setGistStatus(msg, color) {
+        const el = document.getElementById('gistStatus');
+        if (el) { el.innerText = msg; el.style.color = color || 'gray'; }
+    }
+
+    async function saveToGist() {
+        let token = await dbGet('gist_token').catch(() => null);
+        if (!token) {
+            openGistModal();
+            return;
+        }
+        setGistStatus('⏳ Saving to Gist...', '#f39c12');
+        const data = JSON.stringify({ users, officers, loans, ledger, fines, backup_date: getTodayDate() }, null, 2);
+        let gistId = await dbGet('gist_id').catch(() => null);
+        try {
+            let response, result;
+            if (gistId) {
+                // Update existing gist
+                response = await fetch(`https://api.github.com/gists/${gistId}`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files: { [GIST_FILENAME]: { content: data } } })
+                });
+            } else {
+                // Create new gist
+                response = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        description: 'HLB Finance Backup',
+                        public: false,
+                        files: { [GIST_FILENAME]: { content: data } }
+                    })
+                });
+            }
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.message || 'API Error');
+            }
+            result = await response.json();
+            await dbSet('gist_id', result.id);
+            setGistStatus(`✅ Gist saved! (${getTodayDate()})`, '#27ae60');
+            alert(`✅ GitHub Gist mein save ho gaya!\nGist ID: ${result.id}`);
+        } catch (err) {
+            setGistStatus('❌ Save failed — token check karein', '#e74c3c');
+            if (err.message && err.message.includes('401')) {
+                alert('❌ Token galat hai! Dobara set karein.\n\nGist Setup button dabao.');
+                openGistModal();
+            } else {
+                alert(`❌ Error: ${err.message}`);
+            }
+        }
+    }
+
+    async function restoreFromGist() {
+        let token = await dbGet('gist_token').catch(() => null);
+        if (!token) { openGistModal(); return; }
+        let gistId = await dbGet('gist_id').catch(() => null);
+        if (!gistId) {
+            const inputId = prompt('Gist ID daalo (github.com/gists/XXXX mein XXXX):');
+            if (!inputId) return;
+            gistId = inputId.trim();
+        }
+        setGistStatus('⏳ Restoring from Gist...', '#f39c12');
+        try {
+            const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+                headers: { 'Authorization': `token ${token}` }
+            });
+            if (!response.ok) throw new Error('Gist not found');
+            const result = await response.json();
+            const fileContent = result.files[GIST_FILENAME]?.content;
+            if (!fileContent) throw new Error('Backup file not found in Gist');
+            const data = JSON.parse(fileContent);
+            if (data.users)    users    = data.users;
+            if (data.officers) officers = data.officers;
+            if (data.loans)    loans    = data.loans;
+            if (data.ledger)   ledger   = data.ledger;
+            if (data.fines)    fines    = data.fines;
+            await dbSet('gist_id', gistId);
+            saveData();
+            setGistStatus(`✅ Restored! (${data.backup_date || 'unknown'})`, '#27ae60');
+            if (currentUser) refreshUI();
+            alert(`✅ Gist se restore ho gaya!\nBackup date: ${data.backup_date || 'unknown'}`);
+        } catch (err) {
+            setGistStatus('❌ Restore failed', '#e74c3c');
+            alert(`❌ Error: ${err.message}`);
+        }
+    }
+    // ===== END GITHUB GIST =====
+
+    // ===== BULK PAYMENT =====
+    let bulkParsedRows = [];
+
+    function openBulkPaymentModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        document.getElementById('bulkLoanId').value = loanId;
+        document.getElementById('bulkCustomerName').innerText = loan.user_name;
+        document.getElementById('bulkLoanRemaining').innerText = loan.remaining_amount.toLocaleString('en-IN');
+        document.getElementById('bulkPasteArea').value = '';
+        document.getElementById('bulkPreview').innerHTML = '';
+        document.getElementById('bulkSubmitBtn').disabled = true;
+        bulkParsedRows = [];
+        document.getElementById('bulkPaymentModal').style.display = 'flex';
+    }
+
+    function closeBulkPaymentModal() {
+        document.getElementById('bulkPaymentModal').style.display = 'none';
+        bulkParsedRows = [];
+    }
+
+    function parseAmount(str) {
+        return parseFloat(str.replace(/[₹,\s]/g, '')) || 0;
+    }
+
+    function parseDateTime(str) {
+        if (!str) return getTodayDate();
+        str = str.trim();
+        const monthNames = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+
+        // Time, am/pm, comma hata do
+        str = str.replace(/,/g, ' ');
+        str = str.replace(/\d{1,2}:\d{2}\s*(am|pm)?/gi, '');
+        str = str.replace(/\s+/g, ' ').trim();
+
+        let dd, mm, yyyy;
+
+        // Format 1: DD/MM/YYYY ya DD-MM-YYYY (pure numeric)
+        let m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m) {
+            dd = parseInt(m[1]); mm = parseInt(m[2]); yyyy = parseInt(m[3]);
+        }
+
+        // Format 2: DD/Mon/YYYY ya DD-Mon-YYYY ya DD Mon YYYY
+        if (!dd) {
+            m = str.match(/^(\d{1,2})[\/\-\s]([a-zA-Z]{3,})[\/\-\s](\d{4})/);
+            if (m) {
+                dd = parseInt(m[1]);
+                mm = monthNames[m[2].toLowerCase().substring(0,3)] || null;
+                yyyy = parseInt(m[3]);
+            }
+        }
+
+        // Format 3: Mon-DD-YYYY ya Mon DD YYYY (month pehle)
+        if (!dd) {
+            m = str.match(/^([a-zA-Z]{3,})[\/\-\s](\d{1,2})[\/\-\s](\d{4})/);
+            if (m) {
+                mm = monthNames[m[1].toLowerCase().substring(0,3)] || null;
+                dd = parseInt(m[2]);
+                yyyy = parseInt(m[3]);
+            }
+        }
+
+        if (dd && mm && yyyy) {
+            return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
+        }
+        return getTodayDate();
+    }
+
+    function parseBulkPayment() {
+        const text = document.getElementById('bulkPasteArea').value.trim();
+        if (!text) { alert('कुछ paste करें!'); return; }
+        const lines = text.split('\n').filter(l => l.trim());
+        bulkParsedRows = [];
+        let errors = [];
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cols = line.split('\t');
+            if (cols.length < 2) { errors.push(`Line ${i+1}: दो column नहीं मिले — "${line}"`); continue; }
+            const amount = parseAmount(cols[0]);
+            const dateStr = parseDateTime(cols[1]);
+            if (!amount || amount <= 0) { errors.push(`Line ${i+1}: राशि गलत — "${cols[0]}"`); continue; }
+            bulkParsedRows.push({ amount, date: dateStr });
+        }
+        // Date ke hisaab se chronological sort
+        bulkParsedRows.sort((a, b) => {
+            const toMs = d => { const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]).getTime(); };
+            return toMs(a.date) - toMs(b.date);
+        });
+        const loanId = document.getElementById('bulkLoanId').value;
+        const loan = loans[loanId];
+        let remaining = loan ? loan.remaining_amount : 0;
+        let totalAmount = 0;
+        for (let r of bulkParsedRows) totalAmount += r.amount;
+        let html = '';
+        if (errors.length) {
+            html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">⚠️ ${errors.length} लाइन में गड़बड़ी:<br>${errors.join('<br>')}</div>`;
+        }
+        if (bulkParsedRows.length > 0) {
+            html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th></tr></thead><tbody>`;
+            for (let i = 0; i < bulkParsedRows.length; i++) {
+                html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`;
+            }
+            html += `</tbody></table>`;
+            html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
+            document.getElementById('bulkSubmitBtn').disabled = false;
+        } else {
+            document.getElementById('bulkSubmitBtn').disabled = true;
+        }
+        document.getElementById('bulkPreview').innerHTML = html;
+    }
+
+    function submitBulkPayment() {
+        if (!bulkParsedRows.length) { alert('पहले Preview देखें!'); return; }
+        const loanId = document.getElementById('bulkLoanId').value;
+        const loan = loans[loanId];
+        if (!loan) return;
+        if (!confirm(`क्या आप ${bulkParsedRows.length} payments जमा करना चाहते हैं?`)) return;
+        let successCount = 0, skipCount = 0;
+        for (let i = 0; i < bulkParsedRows.length; i++) {
+            const row = bulkParsedRows[i];
+            if (row.amount <= 0 || row.amount > loan.remaining_amount) { skipCount++; continue; }
+            const oldRemaining = loan.remaining_amount;
+            if (loan.type === 'month') {
+                const pendingInterest = Math.max(0, loan.remaining_amount - loan.principal);
+                if (row.amount > pendingInterest) {
+                    loan.principal = Math.max(0, loan.principal - (row.amount - pendingInterest));
+                }
+            }
+            const newRemaining = oldRemaining - row.amount;
+            loan.remaining_amount = newRemaining > 0 ? newRemaining : 0;
+            if (newRemaining <= 0) { loan.status = 'completed'; loan.principal = 0; }
+            const ledgerId = (Date.now() + i).toString();
+            ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: row.date, amount_paid: row.amount, old_balance: oldRemaining, new_balance: loan.remaining_amount, type: 'payment', discount: 0 };
+            successCount++;
+        }
+        loans[loanId] = loan;
+        saveData();
+        refreshUI();
+        closeBulkPaymentModal();
+        alert(`✅ ${successCount} payments जमा हो गई!\n${skipCount > 0 ? `⚠️ ${skipCount} skip हुई (राशि ज्यादा थी)` : ''}\nअब बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}`);
+    }
+    // ===== END BULK PAYMENT =====
+
+    function downloadExcelFile() {
+        const workbook = XLSX.utils.book_new();
+        let customers = Object.entries(users);
+        if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+        for (let [userId, customer] of customers) {
+            const customerLoans = Object.entries(loans).filter(([id,l]) => l.user_id === userId);
+            if (customerLoans.length === 0) continue;
+            for (let [loanId, loan] of customerLoans) {
+                const loanPayments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'payment');
+                let totalPaid = 0;
+                for (let [id, p] of loanPayments) totalPaid += p.amount_paid;
+                let sheetData = [["लोन"], ["ग्राहक", customer.name], ["मोबाइल", customer.mobile], ["लोन तारीख", loan.start_date], ["टाइप", loan.type === 'day' ? 'दिन' : 'माह'], ["मूलधन", loan.principal], ["ब्याज", loan.total_interest], ["फाइन", loan.total_fine || 0], ["डिस्काउंट", loan.total_discount || 0], ["कुल", loan.total_amount], ["जमा", totalPaid], ["बाकी", loan.remaining_amount], [], ["पेमेंट"], ["क्र.सं.", "तारीख", "राशि", "डिस्काउंट"]];
+                let serial = 1;
+                for (let [id, p] of loanPayments) { sheetData.push([serial, p.date, p.amount_paid, p.discount || 0]); serial++; }
+                if (loanPayments.length === 0) sheetData.push(["कोई पेमेंट नहीं", "", "", ""]);
+                const ws = XLSX.utils.aoa_to_sheet(sheetData);
+                XLSX.utils.book_append_sheet(workbook, ws, `${customer.name.substring(0, 25)}`);
+            }
+        }
+        XLSX.writeFile(workbook, `HLB_${getTodayDate().replace(/\//g,'-')}.xlsx`);
+        alert('✅ Excel डाउनलोड हो गई!');
+    }
+
+    function downloadJSON() {
+        const data = { users, officers, loans, ledger, fines, backup_date: getTodayDate() };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `HLB_Backup_${getTodayDate().replace(/\//g,'-')}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        alert('✅ JSON बैकअप डाउनलोड हो गया!');
+    }
+
+    function restoreBackupInside(input) {
+        restoreBackupFromFile(input.files[0]);
+    }
+    function restoreBackupFromLogin() {
+        let file = document.getElementById('restoreFileLogin').files[0];
+        if (!file) { alert('कोई फ़ाइल नहीं चुनी!'); return; }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.users && !data.officers) { alert('❌ गलत फाइल!'); return; }
+                if (data.users)    users    = data.users;
+                if (data.officers) officers = data.officers;
+                if (data.loans)    loans    = data.loans;
+                if (data.ledger)   ledger   = data.ledger;
+                if (data.fines)    fines    = data.fines;
+                saveData();
+                document.getElementById('loginError').innerText = '✅ रिस्टोर हो गया! अब लॉगिन करें';
+                alert('✅ बैकअप रिस्टोर हो गया!\nअब login करें।');
+            } catch(err) { alert('❌ गलत फाइल! ' + err.message); }
+        };
+        reader.readAsText(file);
+    }
+    function restoreBackupFromFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.users && !data.officers) { alert('❌ गलत फाइल!'); return; }
+                const targetOfficerId = currentUser ? currentUser.officerId : null;
+                const restoredUsers  = data.users   || {};
+                const restoredLoans  = data.loans   || {};
+                const restoredLedger = data.ledger  || {};
+                const restoredFines  = data.fines   || {};
+                if (targetOfficerId) {
+                    for (let [uid, u] of Object.entries(restoredUsers))  { u.officer_id = targetOfficerId; users[uid] = u; }
+                    for (let [lid, l] of Object.entries(restoredLoans))  { l.officer_id = targetOfficerId; loans[lid] = l; }
+                    for (let [lid, e] of Object.entries(restoredLedger)) { e.officer_id = targetOfficerId; ledger[lid] = e; }
+                    for (let [fid, f] of Object.entries(restoredFines))  { f.officer_id = targetOfficerId; fines[fid] = f; }
+                } else {
+                    if (data.officers) officers = { ...officers, ...data.officers };
+                    for (let [uid, u] of Object.entries(restoredUsers))  users[uid]   = u;
+                    for (let [lid, l] of Object.entries(restoredLoans))  loans[lid]   = l;
+                    for (let [lid, e] of Object.entries(restoredLedger)) ledger[lid]  = e;
+                    for (let [fid, f] of Object.entries(restoredFines))  fines[fid]   = f;
+                }
+                // Pehle IndexedDB mein save karo, phir UI update karo - reload nahi
+                Promise.all([
+                    dbSet('loan_users', users),
+                    dbSet('loan_officers', officers),
+                    dbSet('loan_loans', loans),
+                    dbSet('loan_ledger', ledger),
+                    dbSet('loan_fines', fines)
+                ]).then(() => {
+                    alert('✅ बैकअप रिस्टोर हो गया!\nसारा data आपके account में आ गया।');
+                    if (currentUser) refreshUI();
+                });
+            } catch(err) { alert('❌ गलत फाइल! ' + err.message); }
+        };
+        reader.readAsText(file);
+    }
+
+    // Customer naam change - sabhi jagah update hoga
+    function renameCustomer(userId) {
+        const user = users[userId];
+        if (!user) return;
+        const newName = prompt('नया नाम डालें:', user.name);
+        if (!newName || newName.trim() === '' || newName.trim() === user.name) return;
+        const oldName = user.name;
+        const trimmedName = newName.trim();
+        users[userId].name = trimmedName;
+        for (let [lid, loan] of Object.entries(loans))   if (loan.user_id  === userId) loans[lid].user_name   = trimmedName;
+        for (let [lid, entry] of Object.entries(ledger)) if (entry.user_id === userId) ledger[lid].user_name  = trimmedName;
+        for (let [fid, fine] of Object.entries(fines))   if (fine.user_id  === userId) fines[fid].user_name   = trimmedName;
+        saveData();
+        refreshUI();
+        alert(`✅ नाम बदल गया!\n"${oldName}" → "${trimmedName}"\nसभी जगह अपडेट हो गया।`);
+        selectCustomer(userId, trimmedName);
+    }
+
+    function updateTotalLoanBox() {
+        let total = 0;
+        for (let [id, loan] of Object.entries(loans)) {
+            if (currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
+            total += (loan.original_principal || loan.principal);
+        }
+        document.getElementById('totalLoanBox').innerHTML = `आज तक: ₹${total.toLocaleString('en-IN')}`;
+    }
+
+    function initMobileTabs() {
+        const tabs = document.querySelectorAll('.tab-btn');
+        const sections = document.querySelectorAll('.tab-section');
+        if (window.innerWidth <= 768) {
+            tabs.forEach(tab => {
+                tab.onclick = function() {
+                    const tabId = this.getAttribute('data-tab');
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    sections.forEach(s => s.classList.remove('active-section'));
+                    document.querySelectorAll(`[data-section="${tabId}"]`).forEach(s => s.classList.add('active-section'));
+                };
+            });
+            document.querySelectorAll('[data-section="stats"]').forEach(s => s.classList.add('active-section'));
+        } else {
+            sections.forEach(s => s.classList.add('active-section'));
+        }
+    }
+
+    function refreshUI() {
+        checkMonthlyInterest();
+        updateTotalLoanBox();
+        updateStats();
+        if (currentUser.role === 'admin') refreshOfficerList();
+        const select = document.getElementById('loanCustomerSelect');
+        if (select) {
+            select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            for (let [id, u] of customers) {
+                select.innerHTML += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`;
+            }
+        }
+        let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
+        if (currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
+        const tbody = document.getElementById('activeLoansList');
+        if (!active.length) { tbody.innerHTML = '<tr><td colspan="8">कोई एक्टिव लोन नहीं</td></tr>'; }
+        else {
+            tbody.innerHTML = '';
+            for (let [id, loan] of active) {
+                let perDayDisplay = '-';
+                if (loan.type === 'day' && loan.per_day) perDayDisplay = '₹' + loan.per_day.toFixed(2);
+                let customerDisplay = loan.user_name;
+                if (users[loan.user_id] && users[loan.user_id].address) customerDisplay += ` (${users[loan.user_id].address.substring(0, 12)})`;
+                tbody.innerHTML += `<tr>
+                    <td><strong>${customerDisplay}</strong></td>
+                    <td>₹${loan.principal}</td>
+                    <td>₹${loan.total_interest}</td>
+                    <td>₹${loan.total_amount}</td>
+                    <td class="remaining">₹${loan.remaining_amount}</td>
+                    <td>${perDayDisplay}</td>
+                    <td>
+                        <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
+                        <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
+                        ${currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
+                        ${currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
+                        ${currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
+                        <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
+                        <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
+                    </td>
+                </tr>`;
+            }
+        }
+        if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
+        document.getElementById('datePicker').value = getTodayDateForInput();
+        showCollectionByDate();
+        initMobileTabs();
+    }
+
+    if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
+        navigator.serviceWorker.register('sw.js').catch(e => console.log('SW:', e));
+    }
+    setupSearch();
+    setupCollectionSearch();
+    setupLedgerSearch();
+    setupLoanSearch();
+    setInterval(() => { if (currentUser) refreshUI(); }, 30000);
+    document.getElementById('loginPassword').addEventListener('keypress', e => { if(e.key === 'Enter') checkLogin(); });
+    currentLang = document.getElementById('languageSelect').value;
+    for (let key in translations[currentLang]) {
+        const el = document.getElementById(key);
+        if (el) el.innerText = translations[currentLang][key];
+    }
+    loadData();
+</script>
+</body>
+</html>
