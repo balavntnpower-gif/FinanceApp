@@ -1081,6 +1081,12 @@
             if (savedLoans)    loans    = savedLoans;
             if (savedLedger)   ledger   = savedLedger;
             if (savedFines)    fines    = savedFines;
+            
+            // Auto-load user.json if no officers exist
+            if (!savedOfficers || Object.keys(savedOfficers).length === 0) {
+                loadUsersFromJSON();
+            }
+            
             if (savedSession) {
                 currentUser = savedSession;
                 if (currentUser.role === 'admin') {
@@ -1109,6 +1115,37 @@
                 }
             }
         }).catch(err => console.error('loadData error:', err));
+    }
+    
+    async function loadUsersFromJSON() {
+        try {
+            const response = await fetch('user.json');
+            if (!response.ok) {
+                console.log('user.json file not found');
+                return;
+            }
+            const data = await response.json();
+            
+            if (data.users) {
+                // Convert user.json format to officers format
+                for (let [username, userData] of Object.entries(data.users)) {
+                    const officerId = 'officer_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    officers[officerId] = {
+                        id: officerId,
+                        username: username,
+                        password: userData.password,
+                        role: userData.role,
+                        expiry: userData.expiry,
+                        name: userData.name
+                    };
+                }
+                
+                await dbSet('loan_officers', officers);
+                console.log('✅ user.json से users load हो गए!');
+            }
+        } catch (error) {
+            console.log('user.json load error:', error.message);
+        }
     }
 
     function updateMonthCollection() {
@@ -2620,7 +2657,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                 tbody.innerHTML += `<tr>
                     <td><strong>${customerDisplay}</strong></td>
                     <td>₹${loan.principal.toLocaleString('en-IN')}</td>
-                    <td>₹${loan.total_interest.toLocaleString('en-IN')} (${loan.interest_rate}%)</td
+                    <td>₹${loan.total_interest.toLocaleString('en-IN')} (${loan.interest_rate}%)</td>
                     <td>₹${loan.total_amount.toLocaleString('en-IN')}</td>
                     <td class="remaining">₹${loan.remaining_amount.toLocaleString('en-IN')}</td>
                     <td>${perDayDisplay}</td>
@@ -2633,7 +2670,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                         ${currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
                         <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
                         <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
-                    </td
+                    </td>
                 </tr>`;
             }
         }
