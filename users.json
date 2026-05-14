@@ -1,1 +1,22 @@
-
+{
+  "users": {
+    "Rudra": {
+      "password": "Admin@123",
+      "role": "admin",
+      "expiry": "2026-12-31",
+      "name": "रुद्र"
+    },
+    "Prakash": {
+      "password": "Prakash",
+      "role": "user",
+      "expiry": "2026-07-15",
+      "name": "प्रकाश"
+    },
+    "Omprakash": {
+      "password": "om@123",
+      "role": "user",
+      "expiry": "2026-08-31",
+      "name": "ओमप्रकाश"
+    }
+  }
+}
