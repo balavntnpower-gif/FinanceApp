@@ -8,13 +8,13 @@
     },
     "Prakash": {
       "password": "Prakash",
-      "role": "user",
+      "role": "officer",
       "expiry": "2026-07-15",
       "name": "प्रकाश"
     },
     "Omprakash": {
       "password": "om@123",
-      "role": "user",
+      "role": "officer",
       "expiry": "2026-08-31",
       "name": "ओमप्रकाश"
     }
