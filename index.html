@@ -1235,21 +1235,42 @@
         }
         
         // users.json authentication from GitHub
+        document.getElementById('loginError').innerText = '⏳ Loading...';
         let usersData = await fetchUsersFromGitHub();
+        
+        console.log('Users Data:', usersData); // Debug
+        
+        if (!usersData) {
+            document.getElementById('loginError').innerText = '❌ GitHub से users.json load नहीं हो रहा! Internet check करें।';
+            return;
+        }
+        
         if (usersData && usersData.users) {
             let user = usersData.users[username];
-            if (user && user.password === password) {
-                let today = new Date().toISOString().slice(0,10);
-                if (user.expiry >= today) {
-                    currentUser = { id: username, name: user.name, role: user.role, officerId: username, password: password, expiry: user.expiry };
-                    dbSet('currentUser', currentUser);
-                    showDashboard();
-                    updateExpiryBadge(user.expiry);
-                    return;
+            
+            console.log('Looking for user:', username); // Debug
+            console.log('Found user:', user); // Debug
+            
+            if (user) {
+                if (user.password === password) {
+                    let today = new Date().toISOString().slice(0,10);
+                    if (user.expiry >= today) {
+                        currentUser = { id: username, name: user.name, role: user.role, officerId: username, password: password, expiry: user.expiry };
+                        dbSet('currentUser', currentUser);
+                        showDashboard();
+                        updateExpiryBadge(user.expiry);
+                        return;
+                    } else {
+                        document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
+                        return;
+                    }
                 } else {
-                    document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
+                    document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!';
                     return;
                 }
+            } else {
+                document.getElementById('loginError').innerText = '❌ User "' + username + '" नहीं मिला!';
+                return;
             }
         }
         
