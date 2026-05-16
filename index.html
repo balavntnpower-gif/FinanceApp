@@ -430,19 +430,6 @@
         .expiry-badge.yellow { background: #f39c12; color: #1a1a2e; }
         .expiry-badge.orange { background: #e67e22; }
         .expiry-badge.red { background: #e74c3c; }
-        .expiry-days-text {
-            font-size: 11px;
-            font-weight: normal;
-            margin-left: 6px;
-            padding: 2px 6px;
-            border-radius: 12px;
-            background: #f39c12;
-            color: #1a1a2e;
-        }
-        .expiry-days-text.urgent {
-            background: #e74c3c;
-            color: white;
-        }
     </style>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -688,9 +675,6 @@
     let reminderVisible = false;
     let pendingReminderTime = null;
     
-    // ✅ Flag to prevent multiple auto-login attempts
-    let autoLoginAttempted = false;
-    
     const translations = {
         hi: {
             loginTitle: "HLB FINANCE", loginSub: "Powered By Hindu Lion Brothers", loginText: "लॉगिन", loginBtn: "लॉगिन",
@@ -755,24 +739,7 @@
 
     function openDB() {
         return new Promise((resolve, reject) => {
-            // ✅ MOBILE FIX: Always check if DB connection is valid
-            if (db) { 
-                try {
-                    // Test if connection is still alive
-                    const testTx = db.transaction(STORE_NAME, 'readonly');
-                    testTx.oncomplete = () => resolve(db);
-                    testTx.onerror = () => {
-                        // Connection is dead, reopen
-                        db = null;
-                        openDB().then(resolve).catch(reject);
-                    };
-                    return;
-                } catch (e) {
-                    // Connection is dead, set to null and reopen
-                    db = null;
-                }
-            }
-            
+            if (db) { resolve(db); return; }
             const req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = function(e) {
                 const d = e.target.result;
@@ -1107,7 +1074,7 @@
         };
     }
 
-    // ✅ FIXED: loadData function with proper session restoration
+    // ✅ FIXED: Mobile-friendly session restore using localStorage backup
     async function loadData() {
         try {
             await openDB();
@@ -1124,73 +1091,73 @@
             if (savedLedger)   ledger   = savedLedger;
             if (savedFines)    fines    = savedFines;
             
-            // ✅ MOBILE FIX: Try to restore from localStorage backup if IndexedDB session is missing
-            let sessionToRestore = savedSession;
-            if (!sessionToRestore || !sessionToRestore.id) {
-                try {
-                    const backupSession = localStorage.getItem('hlb_backup_session');
-                    if (backupSession) {
-                        sessionToRestore = JSON.parse(backupSession);
-                        console.log('Restored session from localStorage backup');
-                        // Save it back to IndexedDB
-                        if (sessionToRestore && sessionToRestore.id && sessionToRestore.role) {
-                            await dbSet('currentUser', sessionToRestore);
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error restoring backup session:', e);
-                }
-            }
-            
             // Load users.json if officers is empty
             if (!savedOfficers || Object.keys(savedOfficers).length === 0) {
                 await loadUsersFromJSON();
             }
             
-            // ✅ CRITICAL FIX: Restore session properly (using sessionToRestore which includes backup)
-            if (sessionToRestore && sessionToRestore.id && sessionToRestore.role) {
-                // Validate the session
+            // ✅ CRITICAL: Try to get session from localStorage (more reliable on mobile)
+            let sessionToUse = savedSession;
+            let localStorageSession = localStorage.getItem('hlb_currentUser');
+            
+            if (localStorageSession && !sessionToUse) {
+                try {
+                    sessionToUse = JSON.parse(localStorageSession);
+                    console.log('Session restored from localStorage');
+                } catch(e) {}
+            }
+            
+            // Also check if localStorage has newer session
+            if (localStorageSession && sessionToUse) {
+                let localSession = JSON.parse(localStorageSession);
+                if (localSession && localSession.id && (!sessionToUse || localSession.timestamp > (sessionToUse.timestamp || 0))) {
+                    sessionToUse = localSession;
+                }
+            }
+            
+            if (sessionToUse && sessionToUse.id && sessionToUse.role) {
                 let isValid = false;
+                let userData = null;
                 
-                if (sessionToRestore.role === 'admin') {
-                    // Admin is always valid (hardcoded)
-                    isValid = true;
-                    currentUser = sessionToRestore;
-                } 
-                else if (sessionToRestore.role === 'officer') {
-                    // Check if officer still exists in officers
-                    if (officers[sessionToRestore.id] || officers[sessionToRestore.officerId]) {
+                if (sessionToUse.role === 'admin') {
+                    if (sessionToUse.id === 'hindu' || sessionToUse.name === 'हिंदू') {
                         isValid = true;
-                        currentUser = sessionToRestore;
-                        // Ensure officerId is set correctly
-                        if (!currentUser.officerId) currentUser.officerId = currentUser.id;
+                        userData = { id: 'hindu', name: 'हिंदू', role: 'admin', officerId: null, expiry: null };
+                    }
+                } 
+                else if (sessionToUse.role === 'officer') {
+                    // Check if officer exists in officers data
+                    if (officers[sessionToUse.id]) {
+                        isValid = true;
+                        userData = sessionToUse;
+                        if (!userData.officerId) userData.officerId = userData.id;
                     } 
+                    else if (officers[sessionToUse.officerId]) {
+                        isValid = true;
+                        userData = sessionToUse;
+                    }
                     else {
-                        // Try to find officer by name
-                        let found = null;
+                        // Try to find by name
                         for (let [id, off] of Object.entries(officers)) {
-                            if (off.name === sessionToRestore.name) {
-                                found = id;
+                            if (off.name === sessionToUse.name || off.username === sessionToUse.id) {
+                                isValid = true;
+                                userData = { ...sessionToUse, id: id, officerId: id, name: off.name };
                                 break;
                             }
-                        }
-                        if (found) {
-                            currentUser = sessionToRestore;
-                            currentUser.id = found;
-                            currentUser.officerId = found;
-                            // Update stored session
-                            await dbSet('currentUser', currentUser);
-                            isValid = true;
                         }
                     }
                 }
                 
-                if (isValid && currentUser) {
+                if (isValid && userData) {
+                    currentUser = userData;
+                    // Save to both DB and localStorage for redundancy
+                    await dbSet('currentUser', currentUser);
+                    localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
+                    
                     // Show dashboard
                     document.getElementById('loginPage').style.display = 'none';
                     document.getElementById('dashboard').style.display = 'block';
                     
-                    // Setup dashboard UI
                     if (currentUser.role === 'officer') {
                         let off = officers[currentUser.id] || officers[currentUser.officerId];
                         if (off && off.print_company_name) document.getElementById('dashboardCompanyName').innerText = off.print_company_name;
@@ -1238,7 +1205,6 @@
                     refreshUI();
                     initMobileTabs();
                     
-                    // Set expiry badge
                     if (currentUser.expiry) {
                         updateExpiryBadge(currentUser.expiry);
                     } else {
@@ -1254,6 +1220,7 @@
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('dashboard').style.display = 'none';
             currentUser = null;
+            localStorage.removeItem('hlb_currentUser');
             
         } catch (error) {
             console.error('loadData error:', error);
@@ -1371,6 +1338,7 @@
                 expiry: null 
             };
             await dbSet('currentUser', currentUser);
+            localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
             showDashboard();
             updateExpiryBadge(null);
             return;
@@ -1413,21 +1381,14 @@
         };
         
         await dbSet('currentUser', currentUser);
+        localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
         showDashboard();
         updateExpiryBadge(user.expiry);
     }
 
-    async function showDashboard() {
+    function showDashboard() {
         document.getElementById('loginPage').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
-        
-        // ✅ MOBILE FIX: Save session again when showing dashboard
-        try {
-            await dbSet('currentUser', currentUser);
-            console.log('Session saved after showing dashboard');
-        } catch (error) {
-            console.error('Error saving session in showDashboard:', error);
-        }
         
         if (currentUser.role === 'officer') {
             let off = officers[currentUser.id];
@@ -1484,13 +1445,12 @@
         }, 5000);
     }
 
-    function logout() {
-        if (confirm('क्या आप वाकई लॉगआउट करना चाहते हैं?')) {
-            dbDelete('currentUser').finally(() => { 
-                currentUser = null; 
-                location.reload(); 
-            });
-        }
+    function logout() { 
+        localStorage.removeItem('hlb_currentUser');
+        dbDelete('currentUser').finally(() => { 
+            currentUser = null; 
+            location.reload(); 
+        }); 
     }
 
     function openNewLoanModal() {
@@ -1626,7 +1586,7 @@
         const div = document.getElementById('officerListDiv');
         if (!div) return;
         if (Object.keys(officers).length === 0) { div.innerHTML = '<p>कोई लोन ऑफिसर नहीं</p>'; return; }
-        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></tr></thead><tbody>';
+        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th><tr></thead><tbody>';
         for (let [id, off] of Object.entries(officers)) {
             html += `<tr>
                         <td>${off.name}</td>
@@ -2491,7 +2451,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td></tr>'}</tbody></table></div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td><tr>'}</tbody></table></div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2659,7 +2619,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             for (let i = 0; i < bulkParsedRows.length; i++) {
                 html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`;
             }
-            html += `</tbody></tr>`;
+            html += `</tbody></table>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
         } else {
@@ -2827,18 +2787,13 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
     }
 
     function refreshUI() {
-        // ✅ Session validation check - prevent auto-logout on mobile/desktop
-        if (!currentUser || !currentUser.id || !currentUser.role) {
-            console.log('refreshUI: No valid session, skipping refresh');
-            return;
-        }
-        
+        if (!currentUser) return;
         checkMonthlyInterest();
         updateTotalLoanBox();
         updateStats();
-        if (currentUser && currentUser.role === 'admin') refreshOfficerList();
+        if (currentUser.role === 'admin') refreshOfficerList();
         const select = document.getElementById('loanCustomerSelect');
-        if (select && currentUser) {
+        if (select) {
             select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
             let customers = Object.entries(users);
             if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
@@ -2847,7 +2802,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             }
         }
         let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
-        if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
+        if (currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
         active.sort((a, b) => {
             if (a[1].type === 'month' && b[1].type !== 'month') return -1;
             if (a[1].type !== 'month' && b[1].type === 'month') return 1;
@@ -2873,10 +2828,10 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                     <td class="btn-group">
                         <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
                         <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
-                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
-                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
-                        ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
-                        ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
+                        ${currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
+                        ${currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
+                        ${currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
+                        ${currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
                         <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
                         <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
                     </td>
@@ -2893,79 +2848,6 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
         navigator.serviceWorker.register('sw.js').catch(e => console.log('SW:', e));
     }
-    
-    // ✅ MOBILE FIX: Save session before page closes/reloads
-    window.addEventListener('beforeunload', function() {
-        if (currentUser && currentUser.id && currentUser.role) {
-            // Use synchronous localStorage as backup for IndexedDB
-            try {
-                localStorage.setItem('hlb_backup_session', JSON.stringify(currentUser));
-                console.log('Backup session saved to localStorage');
-            } catch (e) {
-                console.error('Error saving backup session:', e);
-            }
-        }
-    });
-    
-    // ✅ MOBILE FIX: iOS Safari specific - save on pagehide
-    window.addEventListener('pagehide', function() {
-        if (currentUser && currentUser.id && currentUser.role) {
-            try {
-                localStorage.setItem('hlb_backup_session', JSON.stringify(currentUser));
-                console.log('Backup session saved on pagehide');
-            } catch (e) {
-                console.error('Error saving backup session on pagehide:', e);
-            }
-        }
-    });
-    
-    // ✅ MOBILE FIX: Handle app going to background - keep session alive
-    document.addEventListener('visibilitychange', async function() {
-        if (!document.hidden && currentUser) {
-            // App came back to foreground
-            console.log('App resumed, validating session...');
-            try {
-                // Force DB reconnection by setting to null
-                db = null;
-                
-                // Reload session from IndexedDB
-                const savedSession = await dbGet('currentUser');
-                
-                if (savedSession && savedSession.id && savedSession.role) {
-                    // Session found, restore it
-                    currentUser = savedSession;
-                    console.log('Session restored successfully');
-                    
-                    // Refresh UI
-                    refreshUI();
-                } else {
-                    // No session found, show login
-                    console.log('No session found, showing login');
-                    document.getElementById('loginPage').style.display = 'flex';
-                    document.getElementById('dashboard').style.display = 'none';
-                    currentUser = null;
-                }
-            } catch (error) {
-                console.error('Visibility change error:', error);
-                // On error, try to keep current session if exists
-                if (currentUser && currentUser.id) {
-                    console.log('Keeping existing session despite error');
-                    refreshUI();
-                }
-            }
-        }
-        
-        if (document.hidden && currentUser) {
-            // App going to background, save session one more time
-            console.log('App going to background, saving session...');
-            try {
-                await dbSet('currentUser', currentUser);
-                console.log('Session saved before background');
-            } catch (error) {
-                console.error('Error saving session on background:', error);
-            }
-        }
-    });
     
     // Setup event listeners after DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
@@ -2985,42 +2867,8 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         // Start the app
         loadData();
         
-        // ✅ MOBILE FIX: Auto refresh with session validation and error recovery
-        setInterval(async () => { 
-            if (currentUser && currentUser.id && currentUser.role) {
-                try {
-                    // Verify session is still valid in IndexedDB
-                    const savedSession = await dbGet('currentUser');
-                    
-                    if (savedSession && savedSession.id === currentUser.id) {
-                        // Session matches, safe to refresh
-                        refreshUI();
-                    } else if (savedSession && savedSession.id && savedSession.role) {
-                        // Session exists but different - update currentUser
-                        console.log('Session updated, syncing...');
-                        currentUser = savedSession;
-                        refreshUI();
-                    } else {
-                        // No valid session in DB but we have one in memory - save it
-                        console.log('Re-saving session to DB...');
-                        await dbSet('currentUser', currentUser);
-                        refreshUI();
-                    }
-                } catch (error) {
-                    console.error('Auto-refresh error:', error);
-                    // Try to recover by re-saving current session
-                    if (currentUser && currentUser.id) {
-                        try {
-                            db = null; // Force DB reconnection
-                            await dbSet('currentUser', currentUser);
-                            console.log('Session recovered after error');
-                        } catch (e) {
-                            console.error('Failed to recover session:', e);
-                        }
-                    }
-                }
-            }
-        }, 30000);
+        // Auto refresh every 30 seconds
+        setInterval(() => { if (currentUser) refreshUI(); }, 30000);
     });
 </script>
 </body>
