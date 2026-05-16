@@ -677,7 +677,6 @@
 
 <script>
     // ========== GITHUB CONFIGURATION ==========
-    // ✅ local users.json file use karein (CORS se bachne ke liye)
     const GITHUB_USERS_URL = "users.json";
     
     let users = {}, officers = {}, loans = {}, ledger = {}, fines = {};
@@ -688,6 +687,9 @@
     
     let reminderVisible = false;
     let pendingReminderTime = null;
+    
+    // ✅ Flag to prevent multiple auto-login attempts
+    let autoLoginAttempted = false;
     
     const translations = {
         hi: {
@@ -869,6 +871,7 @@
     }
     
     function checkAndShowReminder() {
+        if (!currentUser) return;
         let now = new Date();
         let currentHour = now.getHours();
         let currentMinute = now.getMinutes();
@@ -1087,78 +1090,173 @@
         };
     }
 
-    function loadData() {
-        openDB().then(() => Promise.all([
-            dbGet('loan_users'), dbGet('loan_officers'), dbGet('loan_loans'),
-            dbGet('loan_ledger'), dbGet('loan_fines'), dbGet('currentUser')
-        ])).then(([savedUsers, savedOfficers, savedLoans, savedLedger, savedFines, savedSession]) => {
+    // ✅ FIXED: loadData function with proper session restoration
+    async function loadData() {
+        try {
+            await openDB();
+            
+            // Load all data first
+            const [savedUsers, savedOfficers, savedLoans, savedLedger, savedFines, savedSession] = await Promise.all([
+                dbGet('loan_users'), dbGet('loan_officers'), dbGet('loan_loans'),
+                dbGet('loan_ledger'), dbGet('loan_fines'), dbGet('currentUser')
+            ]);
+            
             if (savedUsers)    users    = savedUsers;
             if (savedOfficers) officers = savedOfficers;
             if (savedLoans)    loans    = savedLoans;
             if (savedLedger)   ledger   = savedLedger;
             if (savedFines)    fines    = savedFines;
             
+            // Load users.json if officers is empty
             if (!savedOfficers || Object.keys(savedOfficers).length === 0) {
-                loadUsersFromJSON();
+                await loadUsersFromJSON();
             }
             
-            if (savedSession) {
-                currentUser = savedSession;
-                if (currentUser.role === 'admin') {
-                    showDashboard();
-                } else if (currentUser.role === 'officer') {
-                    if (officers[currentUser.id]) {
-                        showDashboard();
-                    } else {
+            // ✅ CRITICAL FIX: Restore session properly
+            if (savedSession && savedSession.id && savedSession.role) {
+                // Validate the session
+                let isValid = false;
+                
+                if (savedSession.role === 'admin') {
+                    // Admin is always valid (hardcoded)
+                    isValid = true;
+                    currentUser = savedSession;
+                } 
+                else if (savedSession.role === 'officer') {
+                    // Check if officer still exists in officers
+                    if (officers[savedSession.id] || officers[savedSession.officerId]) {
+                        isValid = true;
+                        currentUser = savedSession;
+                        // Ensure officerId is set correctly
+                        if (!currentUser.officerId) currentUser.officerId = currentUser.id;
+                    } 
+                    else {
+                        // Try to find officer by name
                         let found = null;
                         for (let [id, off] of Object.entries(officers)) {
-                            if (off.name === currentUser.name) { found = id; break; }
+                            if (off.name === savedSession.name) {
+                                found = id;
+                                break;
+                            }
                         }
                         if (found) {
+                            currentUser = savedSession;
                             currentUser.id = found;
                             currentUser.officerId = found;
-                            dbSet('currentUser', currentUser);
-                            showDashboard();
-                        } else {
-                            dbDelete('currentUser');
-                            currentUser = null;
+                            // Update stored session
+                            await dbSet('currentUser', currentUser);
+                            isValid = true;
                         }
                     }
-                } else {
-                    dbDelete('currentUser');
-                    currentUser = null;
+                }
+                
+                if (isValid && currentUser) {
+                    // Show dashboard
+                    document.getElementById('loginPage').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    
+                    // Setup dashboard UI
+                    if (currentUser.role === 'officer') {
+                        let off = officers[currentUser.id] || officers[currentUser.officerId];
+                        if (off && off.print_company_name) document.getElementById('dashboardCompanyName').innerText = off.print_company_name;
+                        else document.getElementById('dashboardCompanyName').innerText = 'HLB FINANCE';
+                        if (off && off.print_tagline) document.getElementById('dashboardTagline').innerText = off.print_tagline;
+                        else document.getElementById('dashboardTagline').innerText = 'Powered By Hindu Lion Brothers';
+                    } else {
+                        document.getElementById('dashboardCompanyName').innerText = 'HLB FINANCE';
+                        document.getElementById('dashboardTagline').innerText = 'Powered By Hindu Lion Brothers';
+                    }
+                    
+                    document.getElementById('userRoleBadge').innerText = currentUser.role === 'admin' ? 'एडमिन' : 'लोन ऑफिसर';
+                    
+                    let displayName = currentUser.name;
+                    if (currentUser.role === 'officer' && currentUser.expiry) {
+                        let daysInfo = getRemainingDaysText(currentUser.expiry);
+                        if (daysInfo) {
+                            displayName += daysInfo.text;
+                            document.getElementById('userNameDisplay').innerHTML = displayName;
+                            if (daysInfo.class === 'urgent') {
+                                document.getElementById('userNameDisplay').style.color = '#ffcccc';
+                                document.getElementById('userNameDisplay').style.fontWeight = 'bold';
+                            }
+                        } else {
+                            document.getElementById('userNameDisplay').innerText = displayName;
+                        }
+                    } else {
+                        document.getElementById('userNameDisplay').innerText = displayName;
+                    }
+                    
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('officerListCard').classList.remove('hidden');
+                        document.getElementById('newLoanCard').classList.add('hidden');
+                        document.getElementById('newCustomerCard').classList.remove('hidden');
+                        refreshOfficerList();
+                    } else {
+                        document.getElementById('officerListCard').classList.add('hidden');
+                        document.getElementById('newLoanCard').classList.remove('hidden');
+                        document.getElementById('newCustomerCard').classList.remove('hidden');
+                    }
+                    
+                    document.getElementById('collectionDate').value = getTodayDateForInput();
+                    document.getElementById('loanStartDate').value = getTodayDateForInput();
+                    
+                    refreshUI();
+                    initMobileTabs();
+                    
+                    // Set expiry badge
+                    if (currentUser.expiry) {
+                        updateExpiryBadge(currentUser.expiry);
+                    } else {
+                        updateExpiryBadge(null);
+                    }
+                    
+                    setTimeout(() => { checkAndShowReminder(); }, 5000);
+                    return;
                 }
             }
-        }).catch(err => console.error('loadData error:', err));
+            
+            // If no valid session, show login page
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+            currentUser = null;
+            
+        } catch (error) {
+            console.error('loadData error:', error);
+            document.getElementById('loginPage').style.display = 'flex';
+            document.getElementById('dashboard').style.display = 'none';
+        }
     }
     
     async function loadUsersFromJSON() {
         try {
-            const response = await fetch('user.json');
+            const response = await fetch('users.json');
             if (!response.ok) {
-                console.log('user.json file not found');
+                console.log('users.json file not found');
                 return;
             }
             const data = await response.json();
             
             if (data.users) {
                 for (let [username, userData] of Object.entries(data.users)) {
-                    const officerId = 'officer_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    const officerId = username;
                     officers[officerId] = {
                         id: officerId,
                         username: username,
                         password: userData.password,
                         role: userData.role,
                         expiry: userData.expiry,
-                        name: userData.name
+                        name: userData.name,
+                        mobile: userData.mobile || '',
+                        print_company_name: userData.print_company_name || '',
+                        print_tagline: userData.print_tagline || ''
                     };
                 }
                 
                 await dbSet('loan_officers', officers);
-                console.log('✅ user.json से users load हो गए!');
+                console.log('✅ users.json से users load हो गए!');
             }
         } catch (error) {
-            console.log('user.json load error:', error.message);
+            console.log('users.json load error:', error.message);
         }
     }
 
@@ -1223,12 +1321,11 @@
         }
     }
 
-    // ✅ CHECK LOGIN FUNCTION - MODIFIED
     async function checkLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
         
-        // ✅ 1. HARDCODED ADMIN (हमेशा रहेगा - बदलना नहीं है)
+        // HARDCODED ADMIN
         if (username.toLowerCase() === 'hindu' && password === 'Lion') {
             currentUser = { 
                 id: 'hindu', 
@@ -1244,7 +1341,6 @@
             return;
         }
         
-        // ✅ 2. OFFICER LOGIN - सिर्फ users.json से verify होगा
         document.getElementById('loginError').innerText = '⏳ Loading...';
         
         let usersData = await fetchUsersFromGitHub();
@@ -1254,7 +1350,6 @@
             return;
         }
         
-        // ✅ चेक करें कि username users.json में है या नहीं
         let user = usersData.users[username];
         
         if (!user) {
@@ -1262,20 +1357,17 @@
             return;
         }
         
-        // ✅ पासवर्ड चेक करें
         if (user.password !== password) {
             document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!';
             return;
         }
         
-        // ✅ Expiry चेक करें
         let today = new Date().toISOString().slice(0, 10);
         if (user.expiry < today) {
             document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
             return;
         }
         
-        // ✅ Officer login success
         currentUser = { 
             id: username, 
             name: user.name, 
@@ -1349,7 +1441,12 @@
         }, 5000);
     }
 
-    function logout() { dbDelete('currentUser').finally(() => { currentUser = null; location.reload(); }); }
+    function logout() { 
+        dbDelete('currentUser').finally(() => { 
+            currentUser = null; 
+            location.reload(); 
+        }); 
+    }
 
     function openNewLoanModal() {
         document.getElementById('loanStartDate').value = getTodayDateForInput();
@@ -1484,7 +1581,7 @@
         const div = document.getElementById('officerListDiv');
         if (!div) return;
         if (Object.keys(officers).length === 0) { div.innerHTML = '<p>कोई लोन ऑफिसर नहीं</p>'; return; }
-        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></table></thead><tbody>';
+        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></tr></thead><tbody>';
         for (let [id, off] of Object.entries(officers)) {
             html += `<tr>
                         <td>${off.name}</td>
@@ -1497,7 +1594,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                    </table>`;
+                    </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -2134,7 +2231,6 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         updateCollectionLoanSelect();
     }
 
-    // ========== FIXED PRINT FUNCTION (A4 PROPER ALIGNMENT) ==========
     function printLoanDetails(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
@@ -2518,7 +2614,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             for (let i = 0; i < bulkParsedRows.length; i++) {
                 html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`;
             }
-            html += `</tbody></table>`;
+            html += `</tbody></tr>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
         } else {
@@ -2689,9 +2785,9 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         checkMonthlyInterest();
         updateTotalLoanBox();
         updateStats();
-        if (currentUser.role === 'admin') refreshOfficerList();
+        if (currentUser && currentUser.role === 'admin') refreshOfficerList();
         const select = document.getElementById('loanCustomerSelect');
-        if (select) {
+        if (select && currentUser) {
             select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
             let customers = Object.entries(users);
             if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
@@ -2700,13 +2796,14 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             }
         }
         let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
-        if (currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
+        if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
         active.sort((a, b) => {
             if (a[1].type === 'month' && b[1].type !== 'month') return -1;
             if (a[1].type !== 'month' && b[1].type === 'month') return 1;
             return 0;
         });
         const tbody = document.getElementById('activeLoansList');
+        if (!tbody) return;
         if (!active.length) { tbody.innerHTML = '<tr><td colspan="8">कोई एक्टिव लोन नहीं</td></tr>'; }
         else {
             tbody.innerHTML = '';
@@ -2725,14 +2822,14 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                     <td class="btn-group">
                         <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
                         <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
-                        ${currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
-                        ${currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
-                        ${currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
-                        ${currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
                         <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
                         <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
                     </td>
-                  </tr>`;
+                </tr>`;
             }
         }
         if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
@@ -2741,21 +2838,32 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         initMobileTabs();
     }
 
+    // Service Worker
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
         navigator.serviceWorker.register('sw.js').catch(e => console.log('SW:', e));
     }
-    setupSearch();
-    setupCollectionSearch();
-    setupLedgerSearch();
-    setupLoanSearch();
-    setInterval(() => { if (currentUser) refreshUI(); }, 30000);
-    document.getElementById('loginPassword').addEventListener('keypress', e => { if(e.key === 'Enter') checkLogin(); });
-    currentLang = document.getElementById('languageSelect').value;
-    for (let key in translations[currentLang]) {
-        const el = document.getElementById(key);
-        if (el) el.innerText = translations[currentLang][key];
-    }
-    loadData();
+    
+    // Setup event listeners after DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        setupSearch();
+        setupCollectionSearch();
+        setupLedgerSearch();
+        setupLoanSearch();
+        
+        document.getElementById('loginPassword').addEventListener('keypress', e => { if(e.key === 'Enter') checkLogin(); });
+        
+        currentLang = document.getElementById('languageSelect').value;
+        for (let key in translations[currentLang]) {
+            const el = document.getElementById(key);
+            if (el) el.innerText = translations[currentLang][key];
+        }
+        
+        // Start the app
+        loadData();
+        
+        // Auto refresh every 30 seconds
+        setInterval(() => { if (currentUser) refreshUI(); }, 30000);
+    });
 </script>
 </body>
 </html>
