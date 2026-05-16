@@ -430,6 +430,19 @@
         .expiry-badge.yellow { background: #f39c12; color: #1a1a2e; }
         .expiry-badge.orange { background: #e67e22; }
         .expiry-badge.red { background: #e74c3c; }
+        .expiry-days-text {
+            font-size: 11px;
+            font-weight: normal;
+            margin-left: 6px;
+            padding: 2px 6px;
+            border-radius: 12px;
+            background: #f39c12;
+            color: #1a1a2e;
+        }
+        .expiry-days-text.urgent {
+            background: #e74c3c;
+            color: white;
+        }
     </style>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -674,6 +687,9 @@
     
     let reminderVisible = false;
     let pendingReminderTime = null;
+    
+    // ✅ Flag to prevent multiple auto-login attempts
+    let autoLoginAttempted = false;
     
     const translations = {
         hi: {
@@ -1074,7 +1090,7 @@
         };
     }
 
-    // ✅ FIXED: Mobile-friendly session restore using localStorage backup
+    // ✅ FIXED: loadData function with proper session restoration
     async function loadData() {
         try {
             await openDB();
@@ -1096,68 +1112,50 @@
                 await loadUsersFromJSON();
             }
             
-            // ✅ CRITICAL: Try to get session from localStorage (more reliable on mobile)
-            let sessionToUse = savedSession;
-            let localStorageSession = localStorage.getItem('hlb_currentUser');
-            
-            if (localStorageSession && !sessionToUse) {
-                try {
-                    sessionToUse = JSON.parse(localStorageSession);
-                    console.log('Session restored from localStorage');
-                } catch(e) {}
-            }
-            
-            // Also check if localStorage has newer session
-            if (localStorageSession && sessionToUse) {
-                let localSession = JSON.parse(localStorageSession);
-                if (localSession && localSession.id && (!sessionToUse || localSession.timestamp > (sessionToUse.timestamp || 0))) {
-                    sessionToUse = localSession;
-                }
-            }
-            
-            if (sessionToUse && sessionToUse.id && sessionToUse.role) {
+            // ✅ CRITICAL FIX: Restore session properly
+            if (savedSession && savedSession.id && savedSession.role) {
+                // Validate the session
                 let isValid = false;
-                let userData = null;
                 
-                if (sessionToUse.role === 'admin') {
-                    if (sessionToUse.id === 'hindu' || sessionToUse.name === 'हिंदू') {
-                        isValid = true;
-                        userData = { id: 'hindu', name: 'हिंदू', role: 'admin', officerId: null, expiry: null };
-                    }
+                if (savedSession.role === 'admin') {
+                    // Admin is always valid (hardcoded)
+                    isValid = true;
+                    currentUser = savedSession;
                 } 
-                else if (sessionToUse.role === 'officer') {
-                    // Check if officer exists in officers data
-                    if (officers[sessionToUse.id]) {
+                else if (savedSession.role === 'officer') {
+                    // Check if officer still exists in officers
+                    if (officers[savedSession.id] || officers[savedSession.officerId]) {
                         isValid = true;
-                        userData = sessionToUse;
-                        if (!userData.officerId) userData.officerId = userData.id;
+                        currentUser = savedSession;
+                        // Ensure officerId is set correctly
+                        if (!currentUser.officerId) currentUser.officerId = currentUser.id;
                     } 
-                    else if (officers[sessionToUse.officerId]) {
-                        isValid = true;
-                        userData = sessionToUse;
-                    }
                     else {
-                        // Try to find by name
+                        // Try to find officer by name
+                        let found = null;
                         for (let [id, off] of Object.entries(officers)) {
-                            if (off.name === sessionToUse.name || off.username === sessionToUse.id) {
-                                isValid = true;
-                                userData = { ...sessionToUse, id: id, officerId: id, name: off.name };
+                            if (off.name === savedSession.name) {
+                                found = id;
                                 break;
                             }
+                        }
+                        if (found) {
+                            currentUser = savedSession;
+                            currentUser.id = found;
+                            currentUser.officerId = found;
+                            // Update stored session
+                            await dbSet('currentUser', currentUser);
+                            isValid = true;
                         }
                     }
                 }
                 
-                if (isValid && userData) {
-                    currentUser = userData;
-                    // Save to both DB and localStorage for redundancy
-                    await dbSet('currentUser', currentUser);
-                    localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
-                    
+                if (isValid && currentUser) {
                     // Show dashboard
                     document.getElementById('loginPage').style.display = 'none';
                     document.getElementById('dashboard').style.display = 'block';
                     
+                    // Setup dashboard UI
                     if (currentUser.role === 'officer') {
                         let off = officers[currentUser.id] || officers[currentUser.officerId];
                         if (off && off.print_company_name) document.getElementById('dashboardCompanyName').innerText = off.print_company_name;
@@ -1205,6 +1203,7 @@
                     refreshUI();
                     initMobileTabs();
                     
+                    // Set expiry badge
                     if (currentUser.expiry) {
                         updateExpiryBadge(currentUser.expiry);
                     } else {
@@ -1220,7 +1219,6 @@
             document.getElementById('loginPage').style.display = 'flex';
             document.getElementById('dashboard').style.display = 'none';
             currentUser = null;
-            localStorage.removeItem('hlb_currentUser');
             
         } catch (error) {
             console.error('loadData error:', error);
@@ -1338,7 +1336,6 @@
                 expiry: null 
             };
             await dbSet('currentUser', currentUser);
-            localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
             showDashboard();
             updateExpiryBadge(null);
             return;
@@ -1381,7 +1378,6 @@
         };
         
         await dbSet('currentUser', currentUser);
-        localStorage.setItem('hlb_currentUser', JSON.stringify({...currentUser, timestamp: Date.now()}));
         showDashboard();
         updateExpiryBadge(user.expiry);
     }
@@ -1445,12 +1441,13 @@
         }, 5000);
     }
 
-    function logout() { 
-        localStorage.removeItem('hlb_currentUser');
-        dbDelete('currentUser').finally(() => { 
-            currentUser = null; 
-            location.reload(); 
-        }); 
+    function logout() {
+        if (confirm('क्या आप वाकई लॉगआउट करना चाहते हैं?')) {
+            dbDelete('currentUser').finally(() => { 
+                currentUser = null; 
+                location.reload(); 
+            });
+        }
     }
 
     function openNewLoanModal() {
@@ -1586,7 +1583,7 @@
         const div = document.getElementById('officerListDiv');
         if (!div) return;
         if (Object.keys(officers).length === 0) { div.innerHTML = '<p>कोई लोन ऑफिसर नहीं</p>'; return; }
-        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th><tr></thead><tbody>';
+        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></tr></thead><tbody>';
         for (let [id, off] of Object.entries(officers)) {
             html += `<tr>
                         <td>${off.name}</td>
@@ -2451,7 +2448,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td><tr>'}</tbody></table></div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td></tr>'}</tbody></table></div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2619,7 +2616,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             for (let i = 0; i < bulkParsedRows.length; i++) {
                 html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`;
             }
-            html += `</tbody></table>`;
+            html += `</tbody></tr>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
         } else {
@@ -2787,13 +2784,18 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
     }
 
     function refreshUI() {
-        if (!currentUser) return;
+        // ✅ Session validation check - prevent auto-logout on mobile/desktop
+        if (!currentUser || !currentUser.id || !currentUser.role) {
+            console.log('refreshUI: No valid session, skipping refresh');
+            return;
+        }
+        
         checkMonthlyInterest();
         updateTotalLoanBox();
         updateStats();
-        if (currentUser.role === 'admin') refreshOfficerList();
+        if (currentUser && currentUser.role === 'admin') refreshOfficerList();
         const select = document.getElementById('loanCustomerSelect');
-        if (select) {
+        if (select && currentUser) {
             select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
             let customers = Object.entries(users);
             if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
@@ -2802,7 +2804,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             }
         }
         let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
-        if (currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
+        if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
         active.sort((a, b) => {
             if (a[1].type === 'month' && b[1].type !== 'month') return -1;
             if (a[1].type !== 'month' && b[1].type === 'month') return 1;
@@ -2828,10 +2830,10 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                     <td class="btn-group">
                         <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
                         <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
-                        ${currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
-                        ${currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
-                        ${currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
-                        ${currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
+                        ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
                         <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
                         <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
                     </td>
@@ -2848,6 +2850,25 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
         navigator.serviceWorker.register('sw.js').catch(e => console.log('SW:', e));
     }
+    
+    // ✅ Handle mobile app going to background - prevent session loss
+    document.addEventListener('visibilitychange', async function() {
+        if (!document.hidden && currentUser) {
+            // App came back to foreground, validate session
+            try {
+                const savedSession = await dbGet('currentUser');
+                if (!savedSession || savedSession.id !== currentUser.id) {
+                    console.log('Session lost during background, restoring...');
+                    await loadData();
+                } else {
+                    // Session is still valid, just refresh UI
+                    refreshUI();
+                }
+            } catch (error) {
+                console.error('Visibility change error:', error);
+            }
+        }
+    });
     
     // Setup event listeners after DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
@@ -2867,8 +2888,24 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         // Start the app
         loadData();
         
-        // Auto refresh every 30 seconds
-        setInterval(() => { if (currentUser) refreshUI(); }, 30000);
+        // ✅ FIXED: Auto refresh with session validation - prevents auto-logout on mobile/desktop
+        setInterval(async () => { 
+            if (currentUser && currentUser.id && currentUser.role) {
+                // Verify session is still valid in IndexedDB
+                try {
+                    const savedSession = await dbGet('currentUser');
+                    if (savedSession && savedSession.id === currentUser.id) {
+                        refreshUI();
+                    } else {
+                        console.log('Session mismatch detected, reloading data');
+                        await loadData();
+                    }
+                } catch (error) {
+                    console.error('Auto-refresh error:', error);
+                    // Don't logout on error, just skip this refresh cycle
+                }
+            }
+        }, 30000);
     });
 </script>
 </body>
