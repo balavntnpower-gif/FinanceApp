@@ -1225,6 +1225,7 @@
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
         
+        // Hardcoded Admin (Hindu/Lion)
         if (username.toLowerCase() === 'hindu' && password === 'Lion') {
             currentUser = { id: 'hindu', name: 'हिंदू', role: 'admin', officerId: null, password: 'Lion', expiry: null };
             dbSet('currentUser', currentUser);
@@ -1233,31 +1234,22 @@
             return;
         }
         
+        // users.json authentication from GitHub
         let usersData = await fetchUsersFromGitHub();
         if (usersData && usersData.users) {
             let user = usersData.users[username];
             if (user && user.password === password) {
                 let today = new Date().toISOString().slice(0,10);
                 if (user.expiry >= today) {
-                    currentUser = { id: username, name: user.name, role: user.role, officerId: null, password: password, expiry: user.expiry };
+                    currentUser = { id: username, name: user.name, role: user.role, officerId: username, password: password, expiry: user.expiry };
                     dbSet('currentUser', currentUser);
                     showDashboard();
                     updateExpiryBadge(user.expiry);
                     return;
                 } else {
-                    document.getElementById('loginError').innerText = '❌ License Expired! Contact Admin.';
+                    document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
                     return;
                 }
-            }
-        }
-        
-        for (let [id, officer] of Object.entries(officers)) {
-            if (officer.name.trim() === username && officer.password.trim() === password) {
-                currentUser = { id: id, name: officer.name, role: 'officer', officerId: id, password: officer.password, expiry: officer.expiry || null };
-                dbSet('currentUser', currentUser);
-                showDashboard();
-                updateExpiryBadge(officer.expiry || null);
-                return;
             }
         }
         
