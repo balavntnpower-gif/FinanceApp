@@ -17,6 +17,12 @@
       "role": "officer",
       "expiry": "2026-08-31",
       "name": "ओमप्रकाश"
+    },
+    "ChandanSingh": {
+      "password": "Chandan",
+      "role": "officer",
+      "expiry": "2026-12-31",
+      "name": "चंदन सिंह"
     }
   }
 }
