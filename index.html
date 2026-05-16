@@ -677,7 +677,8 @@
 
 <script>
     // ========== GITHUB CONFIGURATION ==========
-    const GITHUB_USERS_URL = "https://raw.githubusercontent.com/balavntnpower-gif/FinanceApp/refs/heads/main/users.json";
+    // ✅ local users.json file use karein (CORS se bachne ke liye)
+    const GITHUB_USERS_URL = "users.json";
     
     let users = {}, officers = {}, loans = {}, ledger = {}, fines = {};
     let currentUser = null;
@@ -1211,6 +1212,7 @@
             localStorage.setItem("githubUsersCache", JSON.stringify({ data, timestamp: Date.now() }));
             return data;
         } catch (error) {
+            console.log('Fetch error:', error);
             let cached = localStorage.getItem("githubUsersCache");
             if (cached) {
                 let cacheData = JSON.parse(cached);
@@ -1221,60 +1223,71 @@
         }
     }
 
+    // ✅ CHECK LOGIN FUNCTION - MODIFIED
     async function checkLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
         
-        // Hardcoded Admin (Hindu/Lion)
+        // ✅ 1. HARDCODED ADMIN (हमेशा रहेगा - बदलना नहीं है)
         if (username.toLowerCase() === 'hindu' && password === 'Lion') {
-            currentUser = { id: 'hindu', name: 'हिंदू', role: 'admin', officerId: null, password: 'Lion', expiry: null };
-            dbSet('currentUser', currentUser);
+            currentUser = { 
+                id: 'hindu', 
+                name: 'हिंदू', 
+                role: 'admin', 
+                officerId: null, 
+                password: 'Lion', 
+                expiry: null 
+            };
+            await dbSet('currentUser', currentUser);
             showDashboard();
             updateExpiryBadge(null);
             return;
         }
         
-        // users.json authentication from GitHub
+        // ✅ 2. OFFICER LOGIN - सिर्फ users.json से verify होगा
         document.getElementById('loginError').innerText = '⏳ Loading...';
+        
         let usersData = await fetchUsersFromGitHub();
         
-        console.log('Users Data:', usersData); // Debug
-        
-        if (!usersData) {
-            document.getElementById('loginError').innerText = '❌ GitHub से users.json load नहीं हो रहा! Internet check करें।';
+        if (!usersData || !usersData.users) {
+            document.getElementById('loginError').innerText = '❌ users.json load नहीं हुआ! Internet check करें।';
             return;
         }
         
-        if (usersData && usersData.users) {
-            let user = usersData.users[username];
-            
-            console.log('Looking for user:', username); // Debug
-            console.log('Found user:', user); // Debug
-            
-            if (user) {
-                if (user.password === password) {
-                    let today = new Date().toISOString().slice(0,10);
-                    if (user.expiry >= today) {
-                        currentUser = { id: username, name: user.name, role: user.role, officerId: username, password: password, expiry: user.expiry };
-                        dbSet('currentUser', currentUser);
-                        showDashboard();
-                        updateExpiryBadge(user.expiry);
-                        return;
-                    } else {
-                        document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
-                        return;
-                    }
-                } else {
-                    document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!';
-                    return;
-                }
-            } else {
-                document.getElementById('loginError').innerText = '❌ User "' + username + '" नहीं मिला!';
-                return;
-            }
+        // ✅ चेक करें कि username users.json में है या नहीं
+        let user = usersData.users[username];
+        
+        if (!user) {
+            document.getElementById('loginError').innerText = '❌ यह यूजर रजिस्टर्ड नहीं है!';
+            return;
         }
         
-        document.getElementById('loginError').innerText = '❌ गलत यूजरनेम या पासवर्ड!';
+        // ✅ पासवर्ड चेक करें
+        if (user.password !== password) {
+            document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!';
+            return;
+        }
+        
+        // ✅ Expiry चेक करें
+        let today = new Date().toISOString().slice(0, 10);
+        if (user.expiry < today) {
+            document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है! Admin से संपर्क करें।';
+            return;
+        }
+        
+        // ✅ Officer login success
+        currentUser = { 
+            id: username, 
+            name: user.name, 
+            role: user.role, 
+            officerId: username, 
+            password: password, 
+            expiry: user.expiry 
+        };
+        
+        await dbSet('currentUser', currentUser);
+        showDashboard();
+        updateExpiryBadge(user.expiry);
     }
 
     function showDashboard() {
@@ -1471,7 +1484,7 @@
         const div = document.getElementById('officerListDiv');
         if (!div) return;
         if (Object.keys(officers).length === 0) { div.innerHTML = '<p>कोई लोन ऑफिसर नहीं</p>'; return; }
-        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></tr></thead><tbody>';
+        let html = '<table class="officer-table"><thead><tr><th>नाम</th><th>पासवर्ड</th><th>मोबाइल</th><th>प्रिंट नाम</th><th>टैगलाइन</th><th>एक्शन</th></table></thead><tbody>';
         for (let [id, off] of Object.entries(officers)) {
             html += `<tr>
                         <td>${off.name}</td>
@@ -1484,7 +1497,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                    </tr>`;
+                    </table>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -2252,7 +2265,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                                 <tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr>
                             </thead>
                             <tbody>
-                                ${col1.map((t, idx) => `<tr style="text-align:center"><td>${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}
+                                ${col1.map((t, idx) => `<tr><td>${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}
                                 ${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td></tr>' : ''}
                             </tbody>
                         </table>
@@ -2263,7 +2276,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                                 <tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr>
                             </thead>
                             <tbody>
-                                ${col2.map((t, idx) => `<tr style="text-align:center"><td>${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}
+                                ${col2.map((t, idx) => `<tr><td>${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}
                                 ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td></tr>' : ''}
                             </tbody>
                         </table>
@@ -2309,7 +2322,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
         });
         let rows = '';
         for (let i = 0; i < all.length; i++) {
-            rows += `<tr><td style="text-align:center;">${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
+            rows += `<tr style="text-align:center"><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
         }
         
         let remarkHtml = '';
@@ -2505,7 +2518,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
             for (let i = 0; i < bulkParsedRows.length; i++) {
                 html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`;
             }
-            html += `</tbody>}</table>`;
+            html += `</tbody></table>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
         } else {
@@ -2550,7 +2563,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                 const loanPayments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'payment');
                 let totalPaid = 0;
                 for (let [id, p] of loanPayments) totalPaid += p.amount_paid;
-                let sheetData = [["लोन"], ["ग्राहक", customer.name], ["मोबाइल", customer.mobile], ["लोन तारीख", loan.start_date], ["टाइप", loan.type === 'day' ? 'दिन' : 'माह'], ["ब्याज दर", loan.interest_rate + "%"], ["मूलधन", loan.principal], ["ब्याज", loan.total_interest], ["फाइन", loan.total_fine || 0], ["डिस्काउंट", loan.total_discount || 0], ["कुल", loan.total_amount], ["जमा", totalPaid], ["बाकी", loan.remaining_amount], [], ["पेमेंट"], ["क्र.सं.", "तारीख", "राशि", "डिस्काउं트"]];
+                let sheetData = [["लोन"], ["ग्राहक", customer.name], ["मोबाइल", customer.mobile], ["लोन तारीख", loan.start_date], ["टाइप", loan.type === 'day' ? 'दिन' : 'माह'], ["ब्याज दर", loan.interest_rate + "%"], ["मूलधन", loan.principal], ["ब्याज", loan.total_interest], ["फाइन", loan.total_fine || 0], ["डिस्काउंट", loan.total_discount || 0], ["कुल", loan.total_amount], ["जमा", totalPaid], ["बाकी", loan.remaining_amount], [], ["पेमेंट"], ["क्र.सं.", "तारीख", "राशि", "डिस्काउंट"]];
                 let serial = 1;
                 for (let [id, p] of loanPayments) { sheetData.push([serial, p.date, p.amount_paid, p.discount || 0]); serial++; }
                 if (loanPayments.length === 0) sheetData.push(["कोई पेमेंट नहीं", "", "", ""]);
@@ -2719,7 +2732,7 @@ ${newPrincipal > 0 ? '✅ नया लोन बनेगा (₹' + newPrincip
                         <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
                         <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
                     </td>
-                 </tr>`;
+                  </tr>`;
             }
         }
         if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
