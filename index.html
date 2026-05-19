@@ -2825,9 +2825,8 @@
         document.getElementById('datePicker').value = getTodayDateForInput();
         showCollectionByDate();
         initMobileTabs();
-        if (document.querySelector('.tab-section[data-section="alert"]') && document.querySelector('.tab-section[data-section="alert"]').classList.contains('active-section')) {
-            showOverdueAlert();
-        }
+        // हमेशा alert data load करें (mobile और desktop दोनों के लिए)
+        showOverdueAlert();
     }
 
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
