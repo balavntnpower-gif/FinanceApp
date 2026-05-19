@@ -572,6 +572,74 @@
             vertical-align: middle;
             padding: 6px 4px;
         }
+        
+        /* Dropdown Action Menu Styles */
+        .action-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .action-dropdown-btn {
+            background: #27ae60;
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .action-dropdown-btn:hover {
+            background: #229954;
+        }
+        .action-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 180px;
+            box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+            z-index: 100;
+            border-radius: 6px;
+            overflow: hidden;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 4px;
+        }
+        .action-dropdown-content button {
+            color: white;
+            padding: 8px 12px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        .action-dropdown-content button:last-child {
+            border-bottom: none;
+        }
+        .action-dropdown-content button:hover {
+            opacity: 0.85;
+            transform: translateX(2px);
+        }
+        .action-dropdown.active .action-dropdown-content {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .action-dropdown-content {
+                left: auto;
+                right: 0;
+                transform: none;
+            }
+        }
     </style>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -2803,6 +2871,33 @@
             if (a[1].type !== 'month' && b[1].type === 'month') return 1;
             return 0;
         });
+        
+        // Dropdown toggle function
+        window.toggleActionDropdown = function(event, loanId) {
+            event.stopPropagation();
+            const dropdown = event.currentTarget.parentElement;
+            const allDropdowns = document.querySelectorAll('.action-dropdown');
+            
+            // Close all other dropdowns
+            allDropdowns.forEach(d => {
+                if (d !== dropdown) {
+                    d.classList.remove('active');
+                }
+            });
+            
+            // Toggle current dropdown
+            dropdown.classList.toggle('active');
+        };
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.action-dropdown')) {
+                document.querySelectorAll('.action-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+        });
+        
         const tbody = document.getElementById('activeLoansList');
         if (!tbody) return;
         if (!active.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">कोई एक्टिव लोन नहीं</td>'; }
@@ -2821,17 +2916,22 @@
                     <td style="text-align:right; background:#ffeaa7; font-weight:bold;">₹${loan.remaining_amount.toLocaleString('en-IN')}</td>
                     <td style="text-align:right;">${perDayDisplay}</td>
                     <td style="text-align:center;">
-                        <div class="action-buttons">
-                            <button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button>
-                            <button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>
-                            ${currentUser && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}
-                            ${currentUser && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}
-                            <button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button>
-                            ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}
-                            ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}
-                            <button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button>
-                            <button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${id}')">🧾 रसीद</button>
-                            <button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button>
+                        <div class="action-dropdown">
+                            <button class="action-dropdown-btn" onclick="toggleActionDropdown(event, '${id}')">
+                                ⚙️ एक्शन ▼
+                            </button>
+                            <div class="action-dropdown-content">
+                                <button class="info" onclick="showLoanDetails('${id}'); event.stopPropagation();">📋 ${t('details')}</button>
+                                <button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button>
+                                ${currentUser && currentUser.role === 'officer' ? `<button style="background:#27ae60;" onclick="openPaymentModal('${id}'); event.stopPropagation();">💰 ${t('payment')}</button>` : ''}
+                                ${currentUser && currentUser.role === 'officer' ? `<button style="background:#16a085;" onclick="openBulkPaymentModal('${id}'); event.stopPropagation();">📋 Bulk</button>` : ''}
+                                <button class="payedit" onclick="openPaymentEditList('${id}'); event.stopPropagation();">📝 Pay Edit</button>
+                                ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button>` : ''}
+                                ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button>` : ''}
+                                <button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>
+                                <button style="background:#8e44ad;" onclick="openReceiptModal('${id}'); event.stopPropagation();">🧾 रसीद</button>
+                                <button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button>
+                            </div>
                         </div>
                     </td>
                 </table>`;
