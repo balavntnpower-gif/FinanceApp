@@ -484,7 +484,67 @@
             flex-wrap: wrap;
             align-items: center;
         }
-        .inline-date-input, .inline-amount-input {
+        
+        /* Active Loans Table New Styles */
+        .active-loans-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .active-loans-table th,
+        .active-loans-table td {
+            border: 1px solid #ddd;
+            padding: 8px 6px;
+            vertical-align: top;
+        }
+        .active-loans-table th {
+            background: #27ae60;
+            color: white;
+            font-size: 11px;
+            text-align: left;
+        }
+        .customer-cell {
+            line-height: 1.3;
+        }
+        .customer-name {
+            font-weight: bold;
+            font-size: 11px;
+        }
+        .customer-address {
+            font-size: 9px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .customer-principal {
+            font-size: 9px;
+            color: #888;
+            margin-top: 3px;
+            border-top: 1px dashed #ddd;
+            padding-top: 3px;
+        }
+        .remaining-amount {
+            font-weight: bold;
+            color: #e74c3c;
+            font-size: 12px;
+        }
+        .per-day-amount {
+            font-size: 11px;
+        }
+        .dropdown-icon-btn {
+            background: #27ae60;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 10px;
+            color: white;
+            font-weight: bold;
+        }
+        .dropdown-icon-btn:hover {
+            background: #219a52;
+        }
+        
+        /* Inline Edit Styles */
+        .inline-edit-input {
             width: 100px;
             padding: 4px;
             font-size: 10px;
@@ -493,15 +553,81 @@
         }
         .inline-date-input {
             width: 85px;
+            padding: 4px;
+            font-size: 10px;
+            border: 1px solid #3498db;
+            border-radius: 4px;
         }
-        .inline-amount-input {
-            width: 80px;
-            text-align: right;
-        }
-        .save-btn {
+        .inline-save-btn {
             background: #27ae60;
             padding: 2px 6px;
             font-size: 9px;
+        }
+        .inline-cancel-btn {
+            background: #95a5a6;
+            padding: 2px 6px;
+            font-size: 9px;
+        }
+        .editing-row {
+            background-color: #fffacd;
+        }
+        
+        /* Action Dropdown Styles */
+        .action-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .action-dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+            z-index: 100;
+            border-radius: 6px;
+            overflow: hidden;
+            top: 100%;
+            right: 0;
+            margin-top: 4px;
+        }
+        .action-dropdown.active .action-dropdown-content {
+            display: block;
+        }
+        .action-dropdown-content button {
+            color: white;
+            padding: 8px 12px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            margin: 0;
+            border-radius: 0;
+        }
+        .action-dropdown-content button:last-child {
+            border-bottom: none;
+        }
+        .action-dropdown-content button:hover {
+            opacity: 0.85;
+        }
+        
+        @media (max-width: 768px) {
+            .active-loans-table th,
+            .active-loans-table td {
+                padding: 6px 4px;
+            }
+            .dropdown-icon-btn {
+                padding: 4px 8px;
+                font-size: 14px;
+            }
+            .action-dropdown-content {
+                min-width: 150px;
+                right: 0;
+                left: auto;
+            }
         }
         
         .action-buttons-row {
@@ -530,115 +656,6 @@
             border-radius: 20px;
             font-size: 10px;
             display: inline-block;
-        }
-        
-        .payedit-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-        }
-        .payedit-table th,
-        .payedit-table td {
-            border: 1px solid #ddd;
-            padding: 8px 6px;
-            text-align: left;
-        }
-        .payedit-table th {
-            background: #27ae60;
-            color: white;
-            font-weight: bold;
-        }
-        .payedit-table td.text-center {
-            text-align: center;
-        }
-        .payedit-table td.text-right {
-            text-align: right;
-        }
-
-        /* ✅ नया CSS: एक्शन बटन को 2 लाइन में लाने के लिए */
-        .action-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: center;
-            align-items: center;
-        }
-        .action-buttons button {
-            font-size: 10px;
-            padding: 4px 8px;
-            white-space: nowrap;
-        }
-        #activeLoansList td {
-            vertical-align: middle;
-            padding: 6px 4px;
-        }
-        
-        /* Dropdown Action Menu Styles */
-        .action-dropdown {
-            position: relative;
-            display: inline-block;
-        }
-        .action-dropdown-btn {
-            background: #27ae60;
-            color: white;
-            padding: 6px 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-        }
-        .action-dropdown-btn:hover {
-            background: #229954;
-        }
-        .action-dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: white;
-            min-width: 180px;
-            box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-            z-index: 100;
-            border-radius: 6px;
-            overflow: hidden;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-top: 4px;
-        }
-        .action-dropdown-content button {
-            color: white;
-            padding: 8px 12px;
-            text-decoration: none;
-            display: block;
-            width: 100%;
-            text-align: left;
-            border: none;
-            cursor: pointer;
-            font-size: 11px;
-            border-bottom: 1px solid rgba(0,0,0,0.1);
-            transition: all 0.2s ease;
-        }
-        .action-dropdown-content button:last-child {
-            border-bottom: none;
-        }
-        .action-dropdown-content button:hover {
-            opacity: 0.85;
-            transform: translateX(2px);
-        }
-        .action-dropdown.active .action-dropdown-content {
-            display: block;
-        }
-        
-        @media (max-width: 768px) {
-            .action-dropdown-content {
-                left: auto;
-                right: 0;
-                transform: none;
-            }
         }
     </style>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -762,16 +779,13 @@
                 <div class="card">
                     <h3 id="activeLoanTitle" style="margin-bottom: 8px;">एक्टिव लोन</h3>
                     <div style="overflow-x: auto;">
-                        <table style="min-width: 650px; width:100%;">
+                        <table class="active-loans-table" id="activeLoansTable">
                             <thead>
                                 <tr>
-                                    <th style="text-align:left;">ग्राहक</th>
-                                    <th style="text-align:right;">मूलधन</th>
-                                    <th style="text-align:right;">ब्याज</th>
-                                    <th style="text-align:right;">कुल</th>
-                                    <th style="text-align:right;">बाकी</th>
-                                    <th style="text-align:right;">प्रति दिन</th>
-                                    <th style="text-align:center;">एक्शन</th>
+                                    <th>ग्राहक</th>
+                                    <th>बाकी</th>
+                                    <th>प्रति दिन</th>
+                                    <th style="text-align:center;">▼</th>
                                 </tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
@@ -1676,7 +1690,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                      </tr>`;
+                      </table>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -1874,357 +1888,80 @@
         alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
     }
 
-    function openEditPayment(ledgerId) {
-        const entry = ledger[ledgerId];
+    // Inline Edit Functions for Pay Edit
+    function startInlineEdit(loanId, paymentId) {
+        const entry = ledger[paymentId];
         if (!entry) return;
-        document.getElementById('editPaymentId').value = ledgerId;
-        document.getElementById('editLoanId').value = entry.loan_id || '';
-        document.getElementById('editCustomerName').value = entry.user_name;
-        document.getElementById('editAmount').value = entry.amount_paid;
-        let parts = entry.date.split('/');
-        document.getElementById('editDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        document.getElementById('editPaymentModal').style.display = 'flex';
+        
+        const row = document.getElementById(`payment-row-${paymentId}`);
+        if (!row) return;
+        
+        // Store original values
+        const originalAmount = entry.amount_paid;
+        const originalDate = entry.date;
+        
+        // Create edit cells
+        const amountCell = row.cells[2];
+        const dateCell = row.cells[1];
+        const actionCell = row.cells[4];
+        
+        const parts = originalDate.split('/');
+        const dateInputValue = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        
+        amountCell.innerHTML = `<input type="number" id="edit-amount-${paymentId}" value="${originalAmount}" step="0.01" class="inline-edit-input" style="width:100px;">`;
+        dateCell.innerHTML = `<input type="date" id="edit-date-${paymentId}" value="${dateInputValue}" class="inline-date-input">`;
+        actionCell.innerHTML = `<button class="inline-save-btn" onclick="saveInlineEdit('${loanId}', '${paymentId}')">💾</button>
+                                <button class="inline-cancel-btn" onclick="cancelInlineEdit('${loanId}', '${paymentId}', ${originalAmount}, '${originalDate}')">✖️</button>`;
+        
+        row.classList.add('editing-row');
     }
-    function closeEditPaymentModal() { document.getElementById('editPaymentModal').style.display = 'none'; }
-
-    function saveEditPayment() {
-        const ledgerId = document.getElementById('editPaymentId').value;
-        const entry = ledger[ledgerId];
-        if (!entry) return;
-        const newAmount = parseFloat(document.getElementById('editAmount').value);
-        const newDateInput = document.getElementById('editDate').value;
-        const newName = document.getElementById('editCustomerName').value;
-        let parts = newDateInput.split('-');
-        let newDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        if (entry.loan_id && loans[entry.loan_id]) {
-            const loan = loans[entry.loan_id];
-            const diff = newAmount - entry.amount_paid;
-            loan.remaining_amount -= diff;
-            if (loan.remaining_amount <= 0) { loan.status = 'completed'; loan.remaining_amount = 0; }
-            else loan.status = 'active';
-            loans[entry.loan_id] = loan;
-            entry.new_balance = loan.remaining_amount;
+    
+    function saveInlineEdit(loanId, paymentId) {
+        const newAmount = parseFloat(document.getElementById(`edit-amount-${paymentId}`).value);
+        const newDateInput = document.getElementById(`edit-date-${paymentId}`).value;
+        
+        if (isNaN(newAmount) || newAmount <= 0) {
+            alert('सही राशि डालें!');
+            return;
         }
+        
+        const parts = newDateInput.split('-');
+        const newDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        
+        const entry = ledger[paymentId];
+        if (!entry) return;
+        
+        const oldAmount = entry.amount_paid;
+        const oldDate = entry.date;
+        
+        // Update ledger entry
         entry.amount_paid = newAmount;
         entry.date = newDate;
-        entry.user_name = newName;
-        ledger[ledgerId] = entry;
-        saveData(); refreshUI(); closeEditPaymentModal();
-        alert('✅ एडिट हो गया!');
-    }
-
-    function deletePayment() {
-        const ledgerId = document.getElementById('editPaymentId').value;
-        const entry = ledger[ledgerId];
-        if (!entry) return;
-        if (confirm('क्या आप इस पेमेंट को डिलीट करना चाहते हैं?')) {
-            if (entry.loan_id && loans[entry.loan_id]) {
-                const loan = loans[entry.loan_id];
-                loan.remaining_amount += entry.amount_paid;
-                if (entry.discount) { loan.total_discount -= entry.discount; loan.total_amount += entry.discount; }
-                if (loan.remaining_amount > 0) loan.status = 'active';
-                loans[entry.loan_id] = loan;
+        ledger[paymentId] = entry;
+        
+        // Update loan remaining amount
+        if (entry.loan_id && loans[entry.loan_id]) {
+            const loan = loans[entry.loan_id];
+            const diff = newAmount - oldAmount;
+            loan.remaining_amount -= diff;
+            if (loan.remaining_amount <= 0) {
+                loan.status = 'completed';
+                loan.remaining_amount = 0;
+            } else {
+                loan.status = 'active';
             }
-            delete ledger[ledgerId];
-            saveData(); refreshUI(); closeEditPaymentModal();
-            alert('🗑️ पेमेंट डिलीट हो गया!');
-        }
-    }
-
-    function openOverdueModal(loanId) {
-        const loan = loans[loanId];
-        if (!loan || loan.type !== 'day') { alert('ओवरड्यू सिर्फ दिन वाले लोन के लिए!'); return; }
-        document.getElementById('overdueLoanId').value = loanId;
-        document.getElementById('overdueUserName').innerText = loan.user_name;
-        document.getElementById('overdueRemaining').innerText = loan.remaining_amount;
-        document.getElementById('overdueAmount').value = '';
-        document.getElementById('overdueModal').style.display = 'flex';
-    }
-    function closeOverdueModal() { document.getElementById('overdueModal').style.display = 'none'; }
-
-    function addOverdue() {
-        const loanId = document.getElementById('overdueLoanId').value;
-        const extra = parseFloat(document.getElementById('overdueAmount').value);
-        const loan = loans[loanId];
-        if (!loan || extra <= 0) { alert('सही राशि डालें!'); return; }
-        loan.total_interest += extra;
-        loan.total_amount += extra;
-        loan.remaining_amount += extra;
-        loan.total_fine = (loan.total_fine || 0) + extra;
-        loans[loanId] = loan;
-        const fineId = Date.now().toString();
-        fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
-        saveData(); refreshUI(); closeOverdueModal();
-        alert('✅ फाइन ₹' + extra + ' ग्राहक के खाते में जुड़ गया!');
-    }
-
-    function openEditLoanModal(loanId) {
-        const loan = loans[loanId];
-        if (!loan) return;
-        document.getElementById('editLoanId').value = loanId;
-        document.getElementById('editInterestRate').value = loan.interest_rate;
-        document.getElementById('editPrincipal').value = loan.principal;
-        let parts = loan.start_date.split('/');
-        document.getElementById('editLoanDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        document.getElementById('editLoanModal').style.display = 'flex';
-    }
-    function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
-
-    function saveEditLoan() {
-        const loanId = document.getElementById('editLoanId').value;
-        const loan = loans[loanId];
-        if (!loan) return;
-        const newInterestRate = parseFloat(document.getElementById('editInterestRate').value);
-        const newPrincipal = parseFloat(document.getElementById('editPrincipal').value);
-        const newStartDateInput = document.getElementById('editLoanDate').value;
-        let parts = newStartDateInput.split('-');
-        let newStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        const totalNormalPayments = getTotalNormalPayments(loanId);
-        if (loan.type === 'day') {
-            const newTotalInterest = newPrincipal * 0.2;
-            const newTotalAmount = newPrincipal + newTotalInterest;
-            const newPerDay = newTotalAmount / loan.days;
-            loan.original_principal = loan.original_principal || newPrincipal;
-            loan.principal = newPrincipal;
-            loan.interest_rate = 20;
-            loan.total_interest = newTotalInterest;
-            loan.total_amount = newTotalAmount;
-            loan.remaining_amount = newTotalAmount - totalNormalPayments;
-            if (loan.remaining_amount <= 0) loan.status = 'completed';
-            else loan.status = 'active';
-            loan.per_day = newPerDay;
-            loan.start_date = newStartDate;
-            let lastDateObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
-            lastDateObj.setDate(lastDateObj.getDate() + loan.days);
-            loan.last_date = `${lastDateObj.getDate().toString().padStart(2,'0')}/${(lastDateObj.getMonth()+1).toString().padStart(2,'0')}/${lastDateObj.getFullYear()}`;
-        } else {
-            loan.original_principal = loan.original_principal || newPrincipal;
-            loan.principal = newPrincipal;
-            loan.interest_rate = newInterestRate;
-            const result = calculateSimpleInterest(loan);
-            loan.total_interest = result.total_interest;
-            loan.total_amount = result.total_amount;
-            loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
-            if (loan.remaining_amount <= 0) loan.status = 'completed';
-            else loan.status = 'active';
-            loan.start_date = newStartDate;
-        }
-        loans[loanId] = loan;
-        saveData(); refreshUI(); closeEditLoanModal();
-        alert('✅ लोन अपडेट हो गया!');
-    }
-
-    function openDeleteLoanModal(loanId) {
-        const loan = loans[loanId];
-        if (!loan) return;
-        if (!confirm(`क्या आप "${loan.user_name}" का लोन डिलीट करना चाहते हैं?`)) return;
-        for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.loan_id === loanId) delete ledger[ledgerId];
-        for (let [fineId, fine] of Object.entries(fines)) if (fine.loan_id === loanId) delete fines[fineId];
-        delete loans[loanId];
-        saveData(); refreshUI();
-        alert(`✅ लोन डिलीट हो गया!`);
-    }
-
-    function showCollectionByDate() {
-        const dateInput = document.getElementById('datePicker').value;
-        if (!dateInput) { alert('तारीख चुनें!'); return; }
-        let parts = dateInput.split('-');
-        let searchDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        let payments = Object.entries(ledger).filter(([id,e]) => e.date === searchDate && e.type !== 'fine');
-        if (currentUser.role === 'officer') payments = payments.filter(([id,e]) => e.officer_id === currentUser.officerId);
-        const div = document.getElementById('collectionList');
-        let total = 0;
-        for (let [id, p] of payments) total += p.amount_paid;
-        if (!payments.length) { div.innerHTML = '<p style="color:gray; text-align:center; padding:15px;">कोई कलेक्शन नहीं</p>'; return; }
-        let html = `<div class="sticky-header">कुल: ₹${total}</div><div>`;
-        for (let [id, p] of payments) {
-            let displayText = `₹${p.amount_paid}`;
-            if (p.discount) displayText += ` (${p.discount} छूट)`;
-            let customerName = p.user_name;
-            if (users[p.user_id] && users[p.user_id].address) customerName += ` (${users[p.user_id].address.substring(0, 15)})`;
-            const receiptBtn = p.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${p.loan_id}')">🧾</button>` : '';
-            html += `<div class="collection-item"><span><strong>${customerName}</strong></span><span>${displayText}</span><span>${p.date}</span><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${receiptBtn}</div>`;
-        }
-        html += '</div>';
-        div.innerHTML = html;
-    }
-
-    function setupLedgerSearch() {
-        const inp = document.getElementById('ledgerSearchInput');
-        const sug = document.getElementById('ledgerSuggestions');
-        inp.addEventListener('input', function() {
-            const q = this.value.toLowerCase();
-            if (!q) { sug.style.display = 'none'; document.getElementById('ledgerResult').innerHTML = ''; return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="showCustomerLedger('${id}','${u.name}')">${u.name} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
-        });
-        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
-    }
-
-    function showCustomerLedger(userId, userName) {
-        document.getElementById('ledgerSearchInput').value = userName;
-        document.getElementById('ledgerSuggestions').style.display = 'none';
-        let customerLedger = Object.entries(ledger).filter(([id,e]) => e.user_id === userId);
-        customerLedger.sort((a,b) => b[0] - a[0]);
-        const div = document.getElementById('ledgerResult');
-        if (!customerLedger.length) { div.innerHTML = '<p>कोई लेन-देन नहीं</p>'; return; }
-        div.innerHTML = '';
-        for (let [id, e] of customerLedger) {
-            let displayText = '';
-            if (e.type === 'payment') { displayText = `जमा: ₹${e.amount_paid}`; if (e.discount) displayText += ` (${e.discount} छूट)`; }
-            else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
-            else if (e.type === 'principal_closure') { displayText = `🔒 ${e.message || 'मूलधन जमा - लोन बंद'}`; }
-            else if (e.type === 'new_loan_from_principal') { displayText = `🆕 ${e.message || 'नया लोन बना'}`; }
-            else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
-            let customerDisplay = e.user_name;
-            if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
-            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${e.date} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
-        }
-    }
-
-    function setupSearch() {
-        const inp = document.getElementById('searchInput');
-        const sug = document.getElementById('searchSuggestions');
-        inp.addEventListener('input', function() {
-            const q = this.value.toLowerCase();
-            if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q) || u.mobile.includes(q));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
-        });
-        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
-    }
-
-    function setupCollectionSearch() {
-        const inp = document.getElementById('collectionNameInput');
-        const sug = document.getElementById('collectionSuggestions');
-        inp.addEventListener('input', function() {
-            const q = this.value.toLowerCase();
-            if (!q) { sug.style.display = 'none'; updateCollectionLoanSelect(); return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
-            if (matches.length) {
-                sug.style.display = 'block';
-                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCollectionCustomer('${u.name}')">${u.name} ${u.address ? '(' + u.address.substring(0, 20) + ')' : ''}</div>`).join('');
-            } else { sug.style.display = 'none'; updateCollectionLoanSelect(); }
-        });
-        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
-    }
-
-    function setupLoanSearch() {
-        const inp = document.getElementById('loanSearchInput');
-        const sug = document.getElementById('loanSearchSuggestions');
-        inp.addEventListener('input', function() {
-            const q = this.value.toLowerCase();
-            if (!q) { sug.style.display = 'none'; return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectLoanCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '(' + u.address + ')' : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
-        });
-        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
-    }
-
-    function selectLoanCustomer(userId, userName) {
-        document.getElementById('loanSearchInput').value = userName;
-        selectedLoanCustomerId = userId;
-        document.getElementById('loanCustomerSelect').value = '';
-        document.getElementById('loanSearchSuggestions').style.display = 'none';
-    }
-
-    function toggleCompletedLoans() {
-        showOnlyCompletedLoans = !showOnlyCompletedLoans;
-        const btn = document.getElementById('toggleCompletedBtn');
-        if (showOnlyCompletedLoans) {
-            btn.innerHTML = '✅ एक्टिव लोन';
-            btn.classList.add('active');
-        } else {
-            btn.innerHTML = '✅ पूरे हुए लोन';
-            btn.classList.remove('active');
-        }
-        if (currentSelectedUserId) {
-            const customer = users[currentSelectedUserId];
-            if (customer) selectCustomer(currentSelectedUserId, customer.name);
-        }
-    }
-
-    function showOverdueAlert() {
-        let overdueList = [];
-        let today = new Date();
-        
-        for (let [loanId, loan] of Object.entries(loans)) {
-            if (currentUser && currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
-            
-            if (loan.type === 'month' && loan.status === 'active') {
-                let lastPaymentDate = null;
-                for (let [id, entry] of Object.entries(ledger)) {
-                    if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
-                        let parts = entry.date.split('/');
-                        let entryDate = new Date(parts[2], parts[1]-1, parts[0]);
-                        if (!lastPaymentDate || entryDate > lastPaymentDate) {
-                            lastPaymentDate = entryDate;
-                        }
-                    }
-                }
-                if (!lastPaymentDate) {
-                    let startParts = loan.start_date.split('/');
-                    lastPaymentDate = new Date(startParts[2], startParts[1]-1, startParts[0]);
-                }
-                let diffDays = Math.floor((today - lastPaymentDate) / (1000 * 60 * 60 * 24));
-                if (diffDays >= 30) {
-                    let customer = users[loan.user_id] || {};
-                    overdueList.push({
-                        loanId: loanId,
-                        customerName: loan.user_name,
-                        customerMobile: customer.mobile || '-',
-                        customerAddress: customer.address || '-',
-                        daysOverdue: diffDays,
-                        remainingAmount: loan.remaining_amount,
-                        loanStartDate: loan.start_date,
-                        userId: loan.user_id
-                    });
-                }
-            }
+            loans[entry.loan_id] = loan;
         }
         
-        overdueList.sort((a, b) => a.daysOverdue - b.daysOverdue);
-        
-        let alertHtml = '';
-        if (overdueList.length === 0) {
-            alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>';
-        } else {
-            for (let item of overdueList) {
-                alertHtml += `<div class="alert-item">
-                    <div><strong>👤 ${item.customerName}</strong> <span class="alert-days">${item.daysOverdue} दिन</span></div>
-                    <div style="font-size:10px; color:#666;">📞 ${item.customerMobile} | 📍 ${item.customerAddress.substring(0, 30)}</div>
-                    <div>💰 बकाया: ₹${item.remainingAmount.toLocaleString('en-IN')} | 📅 लोन तारीख: ${item.loanStartDate}</div>
-                    <div style="margin-top:6px;">
-                        <button class="small info" onclick="showCustomerFromAlert('${item.userId}','${item.customerName}')">📋 विवरण</button>
-                        <button class="small warning" onclick="openPaymentModal('${item.loanId}')">💰 पेमेंट</button>
-                    </div>
-                </div>`;
-            }
-        }
-        
-        const alertDiv = document.getElementById('alertList');
-        if (alertDiv) alertDiv.innerHTML = alertHtml;
+        saveData();
+        refreshUI();
+        alert(`✅ पेमेंट अपडेट!\n📅 ${oldDate} → ${newDate}\n💰 ₹${oldAmount.toLocaleString('en-IN')} → ₹${newAmount.toLocaleString('en-IN')}`);
     }
-
-    function showCustomerFromAlert(userId, userName) {
-        selectCustomer(userId, userName);
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-section').forEach(section => section.classList.remove('active-section'));
-        document.querySelector('.tab-btn[data-tab="loan"]').classList.add('active');
-        document.querySelectorAll('[data-section="loan"]').forEach(section => section.classList.add('active-section'));
+    
+    function cancelInlineEdit(loanId, paymentId, originalAmount, originalDate) {
+        refreshUI();
     }
-
+    
     function openPaymentEditList(loanId) {
         const loan = loans[loanId];
         if (!loan) { alert('❌ लोन नहीं मिला!'); return; }
@@ -2246,15 +1983,15 @@
         for (let i = 0; i < payments.length; i++) {
             const [ledgerId, entry] = payments[i];
             let amountValue = entry.amount_paid || entry.amount || 0;
-            tableRows += `<tr>
+            tableRows += `<tr id="payment-row-${ledgerId}">
                 <td class="text-center">${i+1}</td>
                 <td>${entry.date}</td>
                 <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
                 <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
                 <td class="text-center">
-                    <button class="small info" onclick="openInlineEditPayment('${ledgerId}', '${loanId}')">✏️ Edit</button>
+                    <button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button>
                 </td>
-              </tr>`;
+               </tr>`;
         }
         
         const modalHtml = `
@@ -2284,79 +2021,6 @@
         
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
-    }
-    
-    function openInlineEditPayment(ledgerId, loanId) {
-        const entry = ledger[ledgerId];
-        if (!entry) {
-            alert('❌ पेमेंट नहीं मिला!');
-            return;
-        }
-        
-        const loan = loans[loanId];
-        if (!loan) {
-            alert('❌ लोन नहीं मिला!');
-            return;
-        }
-        
-        const oldAmount = entry.amount_paid || entry.amount || 0;
-        const oldDate = entry.date;
-        
-        let newAmount = prompt(`नई राशि डालें:\nवर्तमान राशि: ₹${oldAmount}`, oldAmount);
-        if (newAmount === null) return;
-        newAmount = parseFloat(newAmount);
-        if (isNaN(newAmount) || newAmount <= 0) {
-            alert('❌ सही राशि डालें!');
-            return;
-        }
-        
-        let newDate = prompt(`नई तारीख डालें (DD/MM/YYYY):\nवर्तमान तारीख: ${oldDate}`, oldDate);
-        if (newDate === null) return;
-        if (!/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.test(newDate)) {
-            alert('❌ तारीख DD/MM/YYYY फॉर्मेट में डालें!');
-            return;
-        }
-        
-        entry.amount_paid = newAmount;
-        entry.amount = newAmount;
-        entry.date = newDate;
-        ledger[ledgerId] = entry;
-        
-        let allPayments = 0;
-        for (let [id, e] of Object.entries(ledger)) {
-            if (e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct')) {
-                allPayments += (e.amount_paid || e.amount || 0);
-            }
-        }
-        
-        let totalLoanAmount = loan.total_amount;
-        if (loan.type === 'day') {
-            totalLoanAmount = loan.principal + (loan.principal * 0.2) + (loan.total_fine || 0) - (loan.total_discount || 0);
-        } else {
-            const startDate = new Date(loan.start_date.split('/').reverse().join('-'));
-            const today = new Date();
-            let monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12;
-            monthsDiff += today.getMonth() - startDate.getMonth();
-            if (today.getDate() < startDate.getDate()) monthsDiff--;
-            const totalMonths = Math.max(0, monthsDiff);
-            const totalInterest = loan.principal * (loan.interest_rate / 100) * totalMonths;
-            totalLoanAmount = loan.principal + totalInterest + (loan.total_fine || 0) - (loan.total_discount || 0);
-            loan.total_interest = Math.round(totalInterest * 100) / 100;
-        }
-        
-        loan.total_amount = totalLoanAmount;
-        loan.remaining_amount = Math.max(0, totalLoanAmount - allPayments);
-        loan.status = loan.remaining_amount <= 0 ? 'completed' : 'active';
-        if (loan.remaining_amount <= 0) loan.remaining_amount = 0;
-        
-        loans[loanId] = loan;
-        
-        saveData();
-        refreshUI();
-        
-        openPaymentEditList(loanId);
-        
-        alert(`✅ पेमेंट अपडेट!\n📅 ${oldDate} → ${newDate}\n💰 ₹${oldAmount.toLocaleString('en-IN')} → ₹${newAmount.toLocaleString('en-IN')}\n📌 बकाया: ₹${loan.remaining_amount.toLocaleString('en-IN')}`);
     }
 
     function selectCustomer(userId, userName) {
@@ -2852,6 +2516,28 @@
         }
     }
 
+    function setupActiveLoansDropdown() {
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.action-dropdown')) {
+                document.querySelectorAll('.action-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+        });
+    }
+    
+    window.toggleActionDropdown = function(event, loanId) {
+        event.stopPropagation();
+        const dropdown = event.currentTarget.parentElement;
+        const allDropdowns = document.querySelectorAll('.action-dropdown');
+        allDropdowns.forEach(d => {
+            if (d !== dropdown) {
+                d.classList.remove('active');
+            }
+        });
+        dropdown.classList.toggle('active');
+    };
+
     function refreshUI() {
         checkMonthlyInterest();
         updateTotalLoanBox();
@@ -2872,54 +2558,32 @@
             return 0;
         });
         
-        // Dropdown toggle function
-        window.toggleActionDropdown = function(event, loanId) {
-            event.stopPropagation();
-            const dropdown = event.currentTarget.parentElement;
-            const allDropdowns = document.querySelectorAll('.action-dropdown');
-            
-            // Close all other dropdowns
-            allDropdowns.forEach(d => {
-                if (d !== dropdown) {
-                    d.classList.remove('active');
-                }
-            });
-            
-            // Toggle current dropdown
-            dropdown.classList.toggle('active');
-        };
-        
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.action-dropdown')) {
-                document.querySelectorAll('.action-dropdown').forEach(d => {
-                    d.classList.remove('active');
-                });
-            }
-        });
+        setupActiveLoansDropdown();
         
         const tbody = document.getElementById('activeLoansList');
         if (!tbody) return;
-        if (!active.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">कोई एक्टिव लोन नहीं</td>'; }
+        if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं</td></tr>'; }
         else {
             tbody.innerHTML = '';
             for (let [id, loan] of active) {
                 let perDayDisplay = '-';
                 if (loan.type === 'day' && loan.per_day) perDayDisplay = '₹' + loan.per_day.toFixed(2);
                 let customerDisplay = loan.user_name;
-                if (users[loan.user_id] && users[loan.user_id].address) customerDisplay += ` (${users[loan.user_id].address.substring(0, 12)})`;
+                let customerAddress = '';
+                if (users[loan.user_id] && users[loan.user_id].address) {
+                    customerAddress = users[loan.user_id].address;
+                    customerDisplay = loan.user_name;
+                }
                 tbody.innerHTML += `<tr>
-                    <td style="text-align:left;"><strong>${customerDisplay}</strong></td>
-                    <td style="text-align:right;">₹${loan.principal.toLocaleString('en-IN')}</td>
-                    <td style="text-align:right;">₹${loan.total_interest.toLocaleString('en-IN')} (${loan.interest_rate}%)</td>
-                    <td style="text-align:right;">₹${loan.total_amount.toLocaleString('en-IN')}</td>
-                    <td style="text-align:right; background:#ffeaa7; font-weight:bold;">₹${loan.remaining_amount.toLocaleString('en-IN')}</td>
-                    <td style="text-align:right;">${perDayDisplay}</td>
+                    <td class="customer-cell">
+                        <div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div>
+                        <div class="customer-principal">मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</div>
+                    </td>
+                    <td class="remaining-amount">₹${loan.remaining_amount.toLocaleString('en-IN')}</td>
+                    <td class="per-day-amount">${perDayDisplay}</td>
                     <td style="text-align:center;">
                         <div class="action-dropdown">
-                            <button class="action-dropdown-btn" onclick="toggleActionDropdown(event, '${id}')">
-                                ⚙️ एक्शन ▼
-                            </button>
+                            <button class="dropdown-icon-btn" onclick="toggleActionDropdown(event, '${id}')">▼</button>
                             <div class="action-dropdown-content">
                                 <button class="info" onclick="showLoanDetails('${id}'); event.stopPropagation();">📋 ${t('details')}</button>
                                 <button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button>
@@ -2934,7 +2598,7 @@
                             </div>
                         </div>
                     </td>
-                </table>`;
+                </tr>`;
             }
         }
         if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
@@ -2942,6 +2606,357 @@
         showCollectionByDate();
         initMobileTabs();
         showOverdueAlert();
+    }
+
+    function setupLedgerSearch() {
+        const inp = document.getElementById('ledgerSearchInput');
+        const sug = document.getElementById('ledgerSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; document.getElementById('ledgerResult').innerHTML = ''; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="showCustomerLedger('${id}','${u.name}')">${u.name} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
+            else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function showCustomerLedger(userId, userName) {
+        document.getElementById('ledgerSearchInput').value = userName;
+        document.getElementById('ledgerSuggestions').style.display = 'none';
+        let customerLedger = Object.entries(ledger).filter(([id,e]) => e.user_id === userId);
+        customerLedger.sort((a,b) => b[0] - a[0]);
+        const div = document.getElementById('ledgerResult');
+        if (!customerLedger.length) { div.innerHTML = '<p>कोई लेन-देन नहीं</p>'; return; }
+        div.innerHTML = '';
+        for (let [id, e] of customerLedger) {
+            let displayText = '';
+            if (e.type === 'payment') { displayText = `जमा: ₹${e.amount_paid}`; if (e.discount) displayText += ` (${e.discount} छूट)`; }
+            else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
+            else if (e.type === 'principal_closure') { displayText = `🔒 ${e.message || 'मूलधन जमा - लोन बंद'}`; }
+            else if (e.type === 'new_loan_from_principal') { displayText = `🆕 ${e.message || 'नया लोन बना'}`; }
+            else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
+            let customerDisplay = e.user_name;
+            if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
+            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${e.date} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
+        }
+    }
+
+    function setupSearch() {
+        const inp = document.getElementById('searchInput');
+        const sug = document.getElementById('searchSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q) || u.mobile.includes(q));
+            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
+            else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function setupCollectionSearch() {
+        const inp = document.getElementById('collectionNameInput');
+        const sug = document.getElementById('collectionSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; updateCollectionLoanSelect(); return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) {
+                sug.style.display = 'block';
+                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCollectionCustomer('${u.name}')">${u.name} ${u.address ? '(' + u.address.substring(0, 20) + ')' : ''}</div>`).join('');
+            } else { sug.style.display = 'none'; updateCollectionLoanSelect(); }
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function setupLoanSearch() {
+        const inp = document.getElementById('loanSearchInput');
+        const sug = document.getElementById('loanSearchSuggestions');
+        inp.addEventListener('input', function() {
+            const q = this.value.toLowerCase();
+            if (!q) { sug.style.display = 'none'; return; }
+            let customers = Object.entries(users);
+            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectLoanCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '(' + u.address + ')' : ''}</div>`).join(''); }
+            else sug.style.display = 'none';
+        });
+        document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
+    }
+
+    function selectLoanCustomer(userId, userName) {
+        document.getElementById('loanSearchInput').value = userName;
+        selectedLoanCustomerId = userId;
+        document.getElementById('loanCustomerSelect').value = '';
+        document.getElementById('loanSearchSuggestions').style.display = 'none';
+    }
+
+    function toggleCompletedLoans() {
+        showOnlyCompletedLoans = !showOnlyCompletedLoans;
+        const btn = document.getElementById('toggleCompletedBtn');
+        if (showOnlyCompletedLoans) {
+            btn.innerHTML = '✅ एक्टिव लोन';
+            btn.classList.add('active');
+        } else {
+            btn.innerHTML = '✅ पूरे हुए लोन';
+            btn.classList.remove('active');
+        }
+        if (currentSelectedUserId) {
+            const customer = users[currentSelectedUserId];
+            if (customer) selectCustomer(currentSelectedUserId, customer.name);
+        }
+    }
+
+    function showOverdueAlert() {
+        let overdueList = [];
+        let today = new Date();
+        
+        for (let [loanId, loan] of Object.entries(loans)) {
+            if (currentUser && currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
+            
+            if (loan.type === 'month' && loan.status === 'active') {
+                let lastPaymentDate = null;
+                for (let [id, entry] of Object.entries(ledger)) {
+                    if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
+                        let parts = entry.date.split('/');
+                        let entryDate = new Date(parts[2], parts[1]-1, parts[0]);
+                        if (!lastPaymentDate || entryDate > lastPaymentDate) {
+                            lastPaymentDate = entryDate;
+                        }
+                    }
+                }
+                if (!lastPaymentDate) {
+                    let startParts = loan.start_date.split('/');
+                    lastPaymentDate = new Date(startParts[2], startParts[1]-1, startParts[0]);
+                }
+                let diffDays = Math.floor((today - lastPaymentDate) / (1000 * 60 * 60 * 24));
+                if (diffDays >= 30) {
+                    let customer = users[loan.user_id] || {};
+                    overdueList.push({
+                        loanId: loanId,
+                        customerName: loan.user_name,
+                        customerMobile: customer.mobile || '-',
+                        customerAddress: customer.address || '-',
+                        daysOverdue: diffDays,
+                        remainingAmount: loan.remaining_amount,
+                        loanStartDate: loan.start_date,
+                        userId: loan.user_id
+                    });
+                }
+            }
+        }
+        
+        overdueList.sort((a, b) => a.daysOverdue - b.daysOverdue);
+        
+        let alertHtml = '';
+        if (overdueList.length === 0) {
+            alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>';
+        } else {
+            for (let item of overdueList) {
+                alertHtml += `<div class="alert-item">
+                    <div><strong>👤 ${item.customerName}</strong> <span class="alert-days">${item.daysOverdue} दिन</span></div>
+                    <div style="font-size:10px; color:#666;">📞 ${item.customerMobile} | 📍 ${item.customerAddress.substring(0, 30)}</div>
+                    <div>💰 बकाया: ₹${item.remainingAmount.toLocaleString('en-IN')} | 📅 लोन तारीख: ${item.loanStartDate}</div>
+                    <div style="margin-top:6px;">
+                        <button class="small info" onclick="showCustomerFromAlert('${item.userId}','${item.customerName}')">📋 विवरण</button>
+                        <button class="small warning" onclick="openPaymentModal('${item.loanId}')">💰 पेमेंट</button>
+                    </div>
+                </div>`;
+            }
+        }
+        
+        const alertDiv = document.getElementById('alertList');
+        if (alertDiv) alertDiv.innerHTML = alertHtml;
+    }
+
+    function showCustomerFromAlert(userId, userName) {
+        selectCustomer(userId, userName);
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-section').forEach(section => section.classList.remove('active-section'));
+        document.querySelector('.tab-btn[data-tab="loan"]').classList.add('active');
+        document.querySelectorAll('[data-section="loan"]').forEach(section => section.classList.add('active-section'));
+    }
+
+    function openEditPayment(ledgerId) {
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        document.getElementById('editPaymentId').value = ledgerId;
+        document.getElementById('editLoanId').value = entry.loan_id || '';
+        document.getElementById('editCustomerName').value = entry.user_name;
+        document.getElementById('editAmount').value = entry.amount_paid;
+        let parts = entry.date.split('/');
+        document.getElementById('editDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        document.getElementById('editPaymentModal').style.display = 'flex';
+    }
+    function closeEditPaymentModal() { document.getElementById('editPaymentModal').style.display = 'none'; }
+
+    function saveEditPayment() {
+        const ledgerId = document.getElementById('editPaymentId').value;
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        const newAmount = parseFloat(document.getElementById('editAmount').value);
+        const newDateInput = document.getElementById('editDate').value;
+        const newName = document.getElementById('editCustomerName').value;
+        let parts = newDateInput.split('-');
+        let newDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        if (entry.loan_id && loans[entry.loan_id]) {
+            const loan = loans[entry.loan_id];
+            const diff = newAmount - entry.amount_paid;
+            loan.remaining_amount -= diff;
+            if (loan.remaining_amount <= 0) { loan.status = 'completed'; loan.remaining_amount = 0; }
+            else loan.status = 'active';
+            loans[entry.loan_id] = loan;
+            entry.new_balance = loan.remaining_amount;
+        }
+        entry.amount_paid = newAmount;
+        entry.date = newDate;
+        entry.user_name = newName;
+        ledger[ledgerId] = entry;
+        saveData(); refreshUI(); closeEditPaymentModal();
+        alert('✅ एडिट हो गया!');
+    }
+
+    function deletePayment() {
+        const ledgerId = document.getElementById('editPaymentId').value;
+        const entry = ledger[ledgerId];
+        if (!entry) return;
+        if (confirm('क्या आप इस पेमेंट को डिलीट करना चाहते हैं?')) {
+            if (entry.loan_id && loans[entry.loan_id]) {
+                const loan = loans[entry.loan_id];
+                loan.remaining_amount += entry.amount_paid;
+                if (entry.discount) { loan.total_discount -= entry.discount; loan.total_amount += entry.discount; }
+                if (loan.remaining_amount > 0) loan.status = 'active';
+                loans[entry.loan_id] = loan;
+            }
+            delete ledger[ledgerId];
+            saveData(); refreshUI(); closeEditPaymentModal();
+            alert('🗑️ पेमेंट डिलीट हो गया!');
+        }
+    }
+
+    function openOverdueModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan || loan.type !== 'day') { alert('ओवरड्यू सिर्फ दिन वाले लोन के लिए!'); return; }
+        document.getElementById('overdueLoanId').value = loanId;
+        document.getElementById('overdueUserName').innerText = loan.user_name;
+        document.getElementById('overdueRemaining').innerText = loan.remaining_amount;
+        document.getElementById('overdueAmount').value = '';
+        document.getElementById('overdueModal').style.display = 'flex';
+    }
+    function closeOverdueModal() { document.getElementById('overdueModal').style.display = 'none'; }
+
+    function addOverdue() {
+        const loanId = document.getElementById('overdueLoanId').value;
+        const extra = parseFloat(document.getElementById('overdueAmount').value);
+        const loan = loans[loanId];
+        if (!loan || extra <= 0) { alert('सही राशि डालें!'); return; }
+        loan.total_interest += extra;
+        loan.total_amount += extra;
+        loan.remaining_amount += extra;
+        loan.total_fine = (loan.total_fine || 0) + extra;
+        loans[loanId] = loan;
+        const fineId = Date.now().toString();
+        fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
+        saveData(); refreshUI(); closeOverdueModal();
+        alert('✅ फाइन ₹' + extra + ' ग्राहक के खाते में जुड़ गया!');
+    }
+
+    function openEditLoanModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        document.getElementById('editLoanId').value = loanId;
+        document.getElementById('editInterestRate').value = loan.interest_rate;
+        document.getElementById('editPrincipal').value = loan.principal;
+        let parts = loan.start_date.split('/');
+        document.getElementById('editLoanDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        document.getElementById('editLoanModal').style.display = 'flex';
+    }
+    function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
+
+    function saveEditLoan() {
+        const loanId = document.getElementById('editLoanId').value;
+        const loan = loans[loanId];
+        if (!loan) return;
+        const newInterestRate = parseFloat(document.getElementById('editInterestRate').value);
+        const newPrincipal = parseFloat(document.getElementById('editPrincipal').value);
+        const newStartDateInput = document.getElementById('editLoanDate').value;
+        let parts = newStartDateInput.split('-');
+        let newStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        const totalNormalPayments = getTotalNormalPayments(loanId);
+        if (loan.type === 'day') {
+            const newTotalInterest = newPrincipal * 0.2;
+            const newTotalAmount = newPrincipal + newTotalInterest;
+            const newPerDay = newTotalAmount / loan.days;
+            loan.original_principal = loan.original_principal || newPrincipal;
+            loan.principal = newPrincipal;
+            loan.interest_rate = 20;
+            loan.total_interest = newTotalInterest;
+            loan.total_amount = newTotalAmount;
+            loan.remaining_amount = newTotalAmount - totalNormalPayments;
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
+            loan.per_day = newPerDay;
+            loan.start_date = newStartDate;
+            let lastDateObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+            lastDateObj.setDate(lastDateObj.getDate() + loan.days);
+            loan.last_date = `${lastDateObj.getDate().toString().padStart(2,'0')}/${(lastDateObj.getMonth()+1).toString().padStart(2,'0')}/${lastDateObj.getFullYear()}`;
+        } else {
+            loan.original_principal = loan.original_principal || newPrincipal;
+            loan.principal = newPrincipal;
+            loan.interest_rate = newInterestRate;
+            const result = calculateSimpleInterest(loan);
+            loan.total_interest = result.total_interest;
+            loan.total_amount = result.total_amount;
+            loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
+            loan.start_date = newStartDate;
+        }
+        loans[loanId] = loan;
+        saveData(); refreshUI(); closeEditLoanModal();
+        alert('✅ लोन अपडेट हो गया!');
+    }
+
+    function openDeleteLoanModal(loanId) {
+        const loan = loans[loanId];
+        if (!loan) return;
+        if (!confirm(`क्या आप "${loan.user_name}" का लोन डिलीट करना चाहते हैं?`)) return;
+        for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.loan_id === loanId) delete ledger[ledgerId];
+        for (let [fineId, fine] of Object.entries(fines)) if (fine.loan_id === loanId) delete fines[fineId];
+        delete loans[loanId];
+        saveData(); refreshUI();
+        alert(`✅ लोन डिलीट हो गया!`);
+    }
+
+    function showCollectionByDate() {
+        const dateInput = document.getElementById('datePicker').value;
+        if (!dateInput) { alert('तारीख चुनें!'); return; }
+        let parts = dateInput.split('-');
+        let searchDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        let payments = Object.entries(ledger).filter(([id,e]) => e.date === searchDate && e.type !== 'fine');
+        if (currentUser.role === 'officer') payments = payments.filter(([id,e]) => e.officer_id === currentUser.officerId);
+        const div = document.getElementById('collectionList');
+        let total = 0;
+        for (let [id, p] of payments) total += p.amount_paid;
+        if (!payments.length) { div.innerHTML = '<p style="color:gray; text-align:center; padding:15px;">कोई कलेक्शन नहीं</p>'; return; }
+        let html = `<div class="sticky-header">कुल: ₹${total}</div><div>`;
+        for (let [id, p] of payments) {
+            let displayText = `₹${p.amount_paid}`;
+            if (p.discount) displayText += ` (${p.discount} छूट)`;
+            let customerName = p.user_name;
+            if (users[p.user_id] && users[p.user_id].address) customerName += ` (${users[p.user_id].address.substring(0, 15)})`;
+            const receiptBtn = p.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${p.loan_id}')">🧾</button>` : '';
+            html += `<div class="collection-item"><span><strong>${customerName}</strong></span><span>${displayText}</span><span>${p.date}</span><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${receiptBtn}</div>`;
+        }
+        html += '</div>';
+        div.innerHTML = html;
     }
 
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !location.hostname.includes('claudeusercontent.com')) {
