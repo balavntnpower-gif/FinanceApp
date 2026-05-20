@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLB Finance - लोन मैनेजर</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; }
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            padding: 15px;
+        }
+        .login-box {
+            background: white;
+            padding: 30px 20px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+        }
+        .login-box input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 10px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .dashboard { display: none; }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .logout-btn { background: #e74c3c; padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; color: white; }
+        .container { padding: 15px; }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h3 { color: #27ae60; margin-bottom: 10px; }
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #27ae60;
+            color: white;
+            cursor: pointer;
+        }
+        button.danger { background: #e74c3c; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #27ae60; color: white; }
+        .error { color: red; margin-top: 5px; }
+        .success { color: green; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="loginPage" class="login-container">
+    <div class="login-box">
+        <h1>HLB FINANCE</h1>
+        <input type="text" id="loginUsername" placeholder="यूजरनेम">
+        <input type="password" id="loginPassword" placeholder="पासवर्ड">
+        <button onclick="checkLogin()">लॉगिन करें</button>
+        <div id="loginError" class="error"></div>
+    </div>
+</div>
+
+<div id="dashboard" class="dashboard">
+    <div class="header">
+        <h1>HLB FINANCE</h1>
+        <button class="logout-btn" onclick="logout()">लॉगआउट</button>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h3>📊 आँकड़े</h3>
+            <div id="stats"></div>
+        </div>
+        
+        <div class="card">
+            <h3>👤 नया ग्राहक</h3>
+            <input type="text" id="newName" placeholder="नाम">
+            <input type="text" id="newMobile" placeholder="मोबाइल">
+            <input type="text" id="newAddress" placeholder="पता">
+            <button onclick="createCustomer()">ग्राहक बनाएं</button>
+        </div>
+
+        <div class="card">
+            <h3>💰 नया लोन</h3>
+            <select id="loanCustomerSelect"><option value="">ग्राहक चुनें</option></select>
+            <input type="number" id="loanAmount" placeholder="मूलधन">
+            <select id="loanType"><option value="day">दिन वाला</option><option value="month">महीने वाला</option></select>
+            <button onclick="createLoan()">लोन बनाएं</button>
+        </div>
+
+        <div class="card">
+            <h3>📋 ग्राहक सूची</h3>
+            <div id="customerList"></div>
+        </div>
+
+        <div class="card">
+            <h3>💰 एक्टिव लोन</h3>
+            <div id="loanList"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Supabase Config
+    const SUPABASE_URL = "https://rpzjnwovtodacmfketbv.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_kJriBmx6xHInmmm5H5CJ3w_0iWgVSbt";
+    let supabase = null;
+    let currentUser = null;
+
+    async function checkLogin() {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        if (username === 'Prakash' && password === 'Prakash') {
+            currentUser = { id: 'Prakash', name: 'प्रकाश', role: 'officer' };
+            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            loadData();
+        } else if (username === 'Rudra' && password === 'Admin@123') {
+            currentUser = { id: 'Rudra', name: 'रुद्र', role: 'admin' };
+            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            loadData();
+        } else {
+            document.getElementById('loginError').innerText = '❌ गलत लॉगिन! Prakash/Prakash या Rudra/Admin@123';
+        }
+    }
+
+    function logout() {
+        currentUser = null;
+        document.getElementById('loginPage').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+    }
+
+    async function loadData() {
+        await loadCustomers();
+        await loadLoans();
+        await loadStats();
+    }
+
+    async function loadCustomers() {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) {
+            console.error('Load customers error:', error);
+            return;
+        }
+        
+        const select = document.getElementById('loanCustomerSelect');
+        select.innerHTML = '<option value="">ग्राहक चुनें</option>';
+        
+        let html = '<table><tr><th>नाम</th><th>मोबाइल</th><th>पता</th></tr>';
+        for (let user of data || []) {
+            select.innerHTML += `<option value="${user.id}">${user.name}</option>`;
+            html += `<tr><td>${user.name}</td><td>${user.mobile || '-'}</td><td>${user.address || '-'}</td></tr>`;
+        }
+        html += '</table>';
+        document.getElementById('customerList').innerHTML = html;
+    }
+
+    async function loadLoans() {
+        const { data, error } = await supabase.from('loans').select('*');
+        if (error) {
+            console.error('Load loans error:', error);
+            return;
+        }
+        
+        let html = '<table><tr><th>ग्राहक</th><th>मूलधन</th><th>बकाया</th><th>टाइप</th></tr>';
+        for (let loan of data || []) {
+            html += `<tr><td>${loan.user_name}</td><td>₹${loan.principal}</td><td>₹${loan.remaining_amount}</td><td>${loan.type === 'day' ? 'दिन वाला' : 'महीने वाला'}</td></tr>`;
+        }
+        html += '</table>';
+        document.getElementById('loanList').innerHTML = html;
+    }
+
+    async function loadStats() {
+        const { data: loans } = await supabase.from('loans').select('*');
+        const { data: customers } = await supabase.from('users').select('*');
+        
+        let totalLoan = 0, totalRemaining = 0;
+        for (let loan of loans || []) {
+            totalLoan += loan.principal || 0;
+            totalRemaining += loan.remaining_amount || 0;
+        }
+        
+        document.getElementById('stats').innerHTML = `
+            <p>📊 ग्राहक: ${customers?.length || 0}</p>
+            <p>💰 कुल लोन: ₹${totalLoan.toLocaleString('en-IN')}</p>
+            <p>📌 कुल बकाया: ₹${totalRemaining.toLocaleString('en-IN')}</p>
+        `;
+    }
+
+    async function createCustomer() {
+        const name = document.getElementById('newName').value;
+        const mobile = document.getElementById('newMobile').value;
+        const address = document.getElementById('newAddress').value;
+        
+        if (!name) {
+            alert('नाम भरें!');
+            return;
+        }
+        
+        const { error } = await supabase.from('users').insert({
+            id: Date.now().toString(),
+            name: name,
+            mobile: mobile,
+            address: address,
+            officer_id: currentUser.id,
+            created_date: new Date().toISOString().split('T')[0]
+        });
+        
+        if (error) {
+            alert('Error: ' + error.message);
+            console.error(error);
+        } else {
+            alert('✅ ग्राहक बन गया!');
+            document.getElementById('newName').value = '';
+            document.getElementById('newMobile').value = '';
+            document.getElementById('newAddress').value = '';
+            loadData();
+        }
+    }
+
+    async function createLoan() {
+        const userId = document.getElementById('loanCustomerSelect').value;
+        const amount = parseFloat(document.getElementById('loanAmount').value);
+        const type = document.getElementById('loanType').value;
+        
+        if (!userId || !amount) {
+            alert('ग्राहक और राशि चुनें!');
+            return;
+        }
+        
+        // Get customer name
+        const { data: userData } = await supabase.from('users').select('name').eq('id', userId).single();
+        
+        const { error } = await supabase.from('loans').insert({
+            id: Date.now().toString(),
+            user_id: userId,
+            user_name: userData?.name || '',
+            officer_id: currentUser.id,
+            type: type,
+            principal: amount,
+            interest_rate: type === 'day' ? 20 : 10,
+            remaining_amount: amount,
+            start_date: new Date().toISOString().split('T')[0],
+            status: 'active',
+            total_fine: 0,
+            total_discount: 0
+        });
+        
+        if (error) {
+            alert('Error: ' + error.message);
+            console.error(error);
+        } else {
+            alert('✅ लोन बन गया!');
+            document.getElementById('loanAmount').value = '';
+            loadData();
+        }
+    }
+</script>
+</body>
+</html>
