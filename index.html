@@ -1777,18 +1777,73 @@
         selectCustomer(userId, trimmedName);
     }
     
-    function deleteCustomer(userId, userName) {
-        if (!confirm(`क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?`)) return;
-        for (let [loanId, loan] of Object.entries(loans)) if (loan.user_id === userId) delete loans[loanId];
-        for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.user_id === userId) delete ledger[ledgerId];
-        for (let [fineId, fine] of Object.entries(fines)) if (fine.user_id === userId) delete fines[fineId];
-        delete users[userId];
-        saveData();
-        refreshUI();
-        document.getElementById('searchInput').value = '';
-        document.getElementById('searchResult').innerHTML = '';
-        alert(`✅ "${userName}" पूरी तरह डिलीट हो गया!`);
+    async function deleteCustomer(userId, userName) {
+    if (!confirm(`क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\n⚠️ ध्यान दें: इस ग्राहक के सभी लोन, कलेक्शन, फाइन भी डिलीट हो जाएंगे!`)) return;
+    
+    // सबसे पहले इस ग्राहक के सभी लोन के IDs collect करें
+    const customerLoans = [];
+    for (let [loanId, loan] of Object.entries(loans)) {
+        if (loan.user_id === userId) {
+            customerLoans.push(loanId);
+        }
     }
+    
+    // 1. Ledger से डिलीट (कलेक्शन)
+    for (let [ledgerId, entry] of Object.entries(ledger)) {
+        if (entry.user_id === userId) {
+            delete ledger[ledgerId];
+            // Supabase से डिलीट
+            if (supabaseClient) {
+                await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+            }
+        }
+    }
+    
+    // 2. Fines से डिलीट
+    for (let [fineId, fine] of Object.entries(fines)) {
+        if (fine.user_id === userId) {
+            delete fines[fineId];
+            if (supabaseClient) {
+                await supabaseClient.from('fines').delete().eq('id', fineId);
+            }
+        }
+    }
+    
+    // 3. Loans से डिलीट
+    for (let loanId of customerLoans) {
+        delete loans[loanId];
+        if (supabaseClient) {
+            await supabaseClient.from('loans').delete().eq('id', loanId);
+        }
+    }
+    
+    // 4. Users से डिलीट
+    delete users[userId];
+    if (supabaseClient) {
+        const { error } = await supabaseClient.from('users').delete().eq('id', userId);
+        if (error) {
+            console.error("Supabase delete error:", error);
+            alert("⚠️ Supabase से डिलीट करते समय error आया, लेकिन Local डेटा डिलीट हो गया।");
+        } else {
+            console.log("✅ User deleted from Supabase successfully");
+        }
+    }
+    
+    // 5. Local Storage/IndexedDB में सेव करें
+    await saveDataToLocal();
+    
+    // 6. UI रिफ्रेश करें
+    refreshUI();
+    
+    // 7. सर्च रिजल्ट और इनपुट क्लियर करें
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchResult').innerHTML = '';
+    if (currentSelectedUserId === userId) {
+        currentSelectedUserId = null;
+    }
+    
+    alert(`✅ "${userName}" पूरी तरह डिलीट हो गया!\n\n🗑️ ${customerLoans.length} लोन और उनके सभी कलेक्शन भी डिलीट हो गए।`);
+}
     
     function openPaymentModal(loanId) {
         const loan = loans[loanId];
