@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HLB Finance - Data Migrator to Supabase</title>
+    <title>One Click Migrate - HLB Finance</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,103 +11,112 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
             min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             padding: 20px;
         }
         .container {
-            max-width: 800px;
-            margin: 0 auto;
+            max-width: 550px;
+            width: 100%;
             background: white;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            text-align: center;
         }
         h1 {
             color: #2c3e50;
-            text-align: center;
-            margin-bottom: 10px;
+            font-size: 24px;
+            margin-bottom: 8px;
         }
         .sub {
-            text-align: center;
             color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
+            font-size: 13px;
+            margin-bottom: 25px;
         }
-        .step {
-            background: #f8f9fa;
-            border-radius: 12px;
+        .login-box {
+            background: #f0f2f5;
+            border-radius: 16px;
             padding: 20px;
             margin-bottom: 20px;
-            border-left: 4px solid #27ae60;
+            text-align: left;
         }
-        .step h3 {
-            color: #27ae60;
-            margin-bottom: 15px;
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 14px;
         }
         button {
             background: #27ae60;
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 14px 28px;
+            border-radius: 50px;
             cursor: pointer;
-            font-size: 14px;
-            margin: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 0;
             transition: all 0.3s;
+            width: 100%;
         }
         button:hover {
             background: #219a52;
             transform: scale(1.02);
         }
-        button.danger {
-            background: #e74c3c;
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
         }
-        button.danger:hover {
-            background: #c0392b;
+        .btn-primary {
+            background: #27ae60;
         }
-        button.info {
+        .btn-info {
             background: #3498db;
         }
-        button.warning {
-            background: #f39c12;
-        }
-        .data-preview {
-            background: #2c3e50;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
         .status {
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
+            padding: 12px;
+            border-radius: 12px;
+            margin: 15px 0;
+            font-size: 14px;
+            text-align: center;
         }
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
         }
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
         }
-        .status.warning {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeeba;
+        .stat-card .number {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stat-card .label {
+            font-size: 11px;
+            opacity: 0.9;
         }
         .progress-bar {
             width: 100%;
-            height: 20px;
+            height: 8px;
             background: #e0e0e0;
             border-radius: 10px;
             overflow: hidden;
-            margin: 10px 0;
+            margin: 15px 0;
         }
         .progress-fill {
             height: 100%;
@@ -115,364 +124,297 @@
             width: 0%;
             transition: width 0.3s;
         }
-        .login-box {
-            background: #e8f5e9;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .login-box input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin: 15px 0;
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-card .number {
-            font-size: 20px;
-            font-weight: bold;
-        }
-        .stat-card .label {
-            font-size: 11px;
-            opacity: 0.9;
-        }
         hr {
             margin: 20px 0;
             border: none;
-            border-top: 1px solid #ddd;
+            border-top: 1px solid #eee;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔄 HLB Finance - Data Migration Tool</h1>
-        <div class="sub">पुराने IndexedDB डेटा को Supabase Cloud में migrate करें</div>
+        <h1>🚀 एक क्लिक माइग्रेट</h1>
+        <div class="sub">अपना सारा डेटा Supabase Cloud में सेव करें</div>
 
-        <!-- Login Section (For Admin) -->
+        <!-- Login Section -->
         <div class="login-box">
-            <h3>🔐 सबसे पहले लॉगिन करें</h3>
-            <input type="text" id="loginUsername" placeholder="Username (hindu for admin)" value="hindu">
-            <input type="password" id="loginPassword" placeholder="Password (Lion for admin)" value="Lion">
-            <button onclick="doLogin()" id="loginBtn">लॉगिन करें</button>
-            <div id="loginStatus"></div>
+            <input type="text" id="username" placeholder="यूजरनेम" value="hindu">
+            <input type="password" id="password" placeholder="पासवर्ड" value="Lion">
         </div>
 
-        <div id="migrationArea" style="display: none;">
-            <!-- Step 1: Load Local Data -->
-            <div class="step">
-                <h3>📂 स्टेप 1: IndexedDB से पुराना डेटा लोड करें</h3>
-                <button onclick="loadLocalData()" id="loadDataBtn">🔍 डेटा लोड करें</button>
-                <div id="loadStatus"></div>
-                <div id="dataPreview" style="display: none;">
-                    <div class="stats" id="dataStats"></div>
-                    <div class="data-preview" id="previewContent"></div>
-                </div>
-            </div>
+        <!-- Main Button -->
+        <button id="startBtn" class="btn-primary" onclick="startMigration()">🚀 एक क्लिक में माइग्रेट शुरू करें</button>
 
-            <!-- Step 2: Sync to Supabase -->
-            <div class="step" id="syncStep" style="display: none;">
-                <h3>☁️ स्टेप 2: Supabase Cloud में सेव करें</h3>
-                <p style="margin-bottom: 10px; color: #e74c3c;">
-                    ⚠️ ध्यान दें: यह डेटा आपके Supabase अकाउंट में सेव होगा।
-                    एक बार सेव होने के बाद, आप किसी भी डिवाइस से लॉगिन करके देख सकेंगे।
-                </p>
-                <button onclick="syncToSupabase()" id="syncBtn" class="info">☁️ Supabase में सेव करें</button>
-                <div id="syncProgress" class="progress-bar" style="display: none;">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <div id="syncStatus"></div>
-            </div>
+        <!-- Status Area -->
+        <div id="statusArea" class="hidden"></div>
 
-            <!-- Step 3: Verification -->
-            <div class="step" id="verifyStep" style="display: none;">
-                <h3>✅ स्टेप 3: वेरीफिकेशन</h3>
-                <button onclick="verifySupabaseData()" class="info">🔍 Supabase डेटा चेक करें</button>
-                <div id="verifyStatus"></div>
+        <!-- Progress Bar -->
+        <div id="progressArea" class="hidden">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
             </div>
+            <div id="progressText" style="font-size: 12px; color: #666; text-align: center;"></div>
         </div>
+
+        <!-- Result Area -->
+        <div id="resultArea" class="hidden"></div>
 
         <hr>
-        <div class="status warning">
-            💡 <strong>महत्वपूर्ण:</strong> यह टूल सिर्फ आपके पुराने डेटा को Supabase में अपलोड करेगा। 
-            आपका पुराना IndexedDB डेटा सुरक्षित रहेगा।
+        <div class="status warning" style="font-size: 12px;">
+            💡 <strong>क्या होगा?</strong><br>
+            • IndexedDB से आपका सारा डेटा लोड होगा<br>
+            • Supabase में अपने आप अपलोड हो जाएगा<br>
+            • 100% automatic, एक क्लिक में!
         </div>
     </div>
 
     <script>
-        // Supabase Configuration
+        // Supabase Config
         const SUPABASE_URL = "https://rpzjnwovtodacmfketbv.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_kJriBmx6xHInmmm5H5CJ3w_0iWgVSbt";
-        let supabaseClient = null;
+        let supabase = null;
         let currentUser = null;
-        
+
         // Local data storage
-        let localUsers = {};
-        let localOfficers = {};
-        let localLoans = {};
-        let localLedger = {};
-        let localFines = {};
+        let localData = {
+            users: {},
+            loans: {},
+            ledger: {},
+            fines: {},
+            officers: {}
+        };
 
-        function initSupabase() {
-            if (typeof supabase === 'undefined') {
-                setTimeout(initSupabase, 500);
-                return;
-            }
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log("✅ Supabase initialized!");
+        function showStatus(message, type) {
+            const statusArea = document.getElementById('statusArea');
+            statusArea.className = `status ${type}`;
+            statusArea.innerHTML = message;
+            statusArea.classList.remove('hidden');
         }
-        initSupabase();
 
-        async function doLogin() {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-            const statusDiv = document.getElementById('loginStatus');
+        function hideStatus() {
+            document.getElementById('statusArea').classList.add('hidden');
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = `${percent}%`;
+            document.getElementById('progressText').innerHTML = text;
+        }
+
+        async function startMigration() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const startBtn = document.getElementById('startBtn');
             
-            statusDiv.innerHTML = '<div class="status">⏳ लॉगिन हो रहा है...</div>';
+            // Show progress area
+            document.getElementById('progressArea').classList.remove('hidden');
+            document.getElementById('resultArea').classList.add('hidden');
+            hideStatus();
             
-            // Admin login
-            if (username === 'hindu' && password === 'Lion') {
-                currentUser = { id: 'hindu', name: 'Admin', role: 'admin', officerId: null };
-                statusDiv.innerHTML = '<div class="status success">✅ एडमिन लॉगिन सफल!</div>';
-                document.getElementById('migrationArea').style.display = 'block';
-                document.getElementById('loginBtn').disabled = true;
+            updateProgress(5, "🔐 लॉगिन हो रहा है...");
+
+            // Check login
+            if (username !== 'hindu' || password !== 'Lion') {
+                showStatus('❌ गलत लॉगिन! hindu / Lion use करें', 'error');
+                updateProgress(0, "");
                 return;
             }
-            
-            // Try to fetch from users.json (if exists)
+
             try {
-                const response = await fetch('users.json');
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.users && data.users[username]) {
-                        const user = data.users[username];
-                        if (user.password === password) {
-                            currentUser = { id: username, name: user.name, role: user.role, officerId: username };
-                            statusDiv.innerHTML = '<div class="status success">✅ लॉगिन सफल!</div>';
-                            document.getElementById('migrationArea').style.display = 'block';
-                            document.getElementById('loginBtn').disabled = true;
-                            return;
-                        }
-                    }
-                }
-            } catch(e) {}
-            
-            statusDiv.innerHTML = '<div class="status error">❌ गलत यूजरनेम या पासवर्ड! (hindu/Lion use करें)</div>';
-        }
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                currentUser = { id: 'hindu', name: 'Admin', role: 'admin' };
+                updateProgress(10, "✅ लॉगिन सफल! अब डेटा लोड हो रहा है...");
+            } catch(e) {
+                showStatus('❌ Supabase initialize नहीं हुआ: ' + e.message, 'error');
+                updateProgress(0, "");
+                return;
+            }
 
-        function loadLocalData() {
-            const statusDiv = document.getElementById('loadStatus');
-            statusDiv.innerHTML = '<div class="status">⏳ IndexedDB से डेटा लोड हो रहा है...</div>';
+            // Load data from IndexedDB
+            updateProgress(15, "📂 IndexedDB से डेटा लोड हो रहा है...");
             
-            const request = indexedDB.open('HLBFinanceDB', 1);
+            const loaded = await loadFromIndexedDB();
+            if (!loaded) {
+                showStatus('❌ IndexedDB में कोई डेटा नहीं मिला! पहले ऐप use कीजिए।', 'error');
+                updateProgress(0, "");
+                return;
+            }
+
+            // Count data
+            const usersCount = Object.keys(localData.users).length;
+            const loansCount = Object.keys(localData.loans).length;
+            const ledgerCount = Object.keys(localData.ledger).length;
+            const finesCount = Object.keys(localData.fines).length;
+            const officersCount = Object.keys(localData.officers).length;
+
+            updateProgress(30, `📊 डेटा लोड हुआ: ${usersCount} ग्राहक, ${loansCount} लोन, ${ledgerCount} कलेक्शन`);
+
+            // Upload to Supabase
+            updateProgress(40, "☁️ Supabase में अपलोड हो रहा है...");
             
-            request.onerror = function() {
-                statusDiv.innerHTML = '<div class="status error">❌ IndexedDB ओपन नहीं हो पाया! हो सकता है डेटा न हो।</div>';
-            };
+            const results = await uploadToSupabase();
             
-            request.onsuccess = function(event) {
-                const db = event.target.result;
-                const transaction = db.transaction(['appData'], 'readonly');
-                const store = transaction.objectStore('appData');
-                
-                // Get all data
-                const getUsers = store.get('loan_users');
-                const getOfficers = store.get('loan_officers');
-                const getLoans = store.get('loan_loans');
-                const getLedger = store.get('loan_ledger');
-                const getFines = store.get('loan_fines');
-                
-                let completed = 0;
-                function checkComplete() {
-                    completed++;
-                    if (completed === 5) {
-                        displayLocalData();
-                    }
-                }
-                
-                getUsers.onsuccess = function() { localUsers = getUsers.result || {}; checkComplete(); };
-                getOfficers.onsuccess = function() { localOfficers = getOfficers.result || {}; checkComplete(); };
-                getLoans.onsuccess = function() { localLoans = getLoans.result || {}; checkComplete(); };
-                getLedger.onsuccess = function() { localLedger = getLedger.result || {}; checkComplete(); };
-                getFines.onsuccess = function() { localFines = getFines.result || {}; checkComplete(); };
-            };
-        }
-        
-        function displayLocalData() {
-            const usersCount = Object.keys(localUsers).length;
-            const loansCount = Object.keys(localLoans).length;
-            const ledgerCount = Object.keys(localLedger).length;
-            const finesCount = Object.keys(localFines).length;
-            const officersCount = Object.keys(localOfficers).length;
+            updateProgress(100, "✅ अपलोड पूरा!");
             
-            const statsHtml = `
-                <div class="stat-card"><div class="number">${usersCount}</div><div class="label">ग्राहक</div></div>
-                <div class="stat-card"><div class="number">${loansCount}</div><div class="label">लोन</div></div>
-                <div class="stat-card"><div class="number">${ledgerCount}</div><div class="label">कलेक्शन एंट्री</div></div>
-                <div class="stat-card"><div class="number">${finesCount}</div><div class="label">फाइन</div></div>
-                <div class="stat-card"><div class="number">${officersCount}</div><div class="label">ऑफिसर</div></div>
+            // Show results
+            const resultHtml = `
+                <div class="stats">
+                    <div class="stat-card"><div class="number">${results.users}</div><div class="label">ग्राहक</div></div>
+                    <div class="stat-card"><div class="number">${results.loans}</div><div class="label">लोन</div></div>
+                    <div class="stat-card"><div class="number">${results.ledger}</div><div class="label">कलेक्शन</div></div>
+                    <div class="stat-card"><div class="number">${results.fines}</div><div class="label">फाइन</div></div>
+                </div>
+                <div class="status success">
+                    ✅ कुल अपलोड: ${results.totalSuccess}<br>
+                    ❌ फेल: ${results.totalFail}
+                </div>
+                <button onclick="location.reload()" style="background:#3498db; margin-top:10px;">🔄 फिर से करें</button>
+                <a href="https://balavntnpower-gif.github.io/FinanceApp/" target="_blank">
+                    <button style="background:#27ae60; margin-top:10px;">🎯 ऐप खोलें</button>
+                </a>
             `;
             
-            let previewHtml = '<strong>📋 डेटा प्रीव्यू (पहले 5 आइटम):</strong><br><br>';
+            document.getElementById('resultArea').innerHTML = resultHtml;
+            document.getElementById('resultArea').classList.remove('hidden');
             
-            if (usersCount > 0) {
-                previewHtml += '<strong>ग्राहक:</strong><br>';
-                Object.entries(localUsers).slice(0, 5).forEach(([id, u]) => {
-                    previewHtml += `• ${u.name} (${u.mobile || 'नो मोबाइल'})<br>`;
-                });
-                previewHtml += '<br>';
+            if (results.totalFail === 0) {
+                showStatus('🎉 सभी डेटा सफलतापूर्वक Supabase में सेव हो गया!', 'success');
+            } else {
+                showStatus(`⚠️ ${results.totalSuccess} सफल, ${results.totalFail} फेल`, 'warning');
             }
             
-            if (loansCount > 0) {
-                previewHtml += '<strong>लोन:</strong><br>';
-                Object.entries(localLoans).slice(0, 5).forEach(([id, l]) => {
-                    previewHtml += `• ${l.user_name} - ₹${l.principal} (${l.type})<br>`;
-                });
-                previewHtml += '<br>';
-            }
-            
-            document.getElementById('dataStats').innerHTML = statsHtml;
-            document.getElementById('previewContent').innerHTML = previewHtml;
-            document.getElementById('dataPreview').style.display = 'block';
-            document.getElementById('loadStatus').innerHTML = '<div class="status success">✅ डेटा लोड हो गया! कुल ' + usersCount + ' ग्राहक, ' + loansCount + ' लोन मिले।</div>';
-            document.getElementById('syncStep').style.display = 'block';
+            startBtn.disabled = false;
+            document.getElementById('progressArea').classList.add('hidden');
         }
-        
-        async function syncToSupabase() {
-            if (!supabaseClient) {
-                alert("Supabase initialize नहीं हुआ! इंटरनेट चेक करें।");
-                return;
-            }
-            
-            if (Object.keys(localUsers).length === 0 && Object.keys(localLoans).length === 0) {
-                alert("कोई डेटा नहीं मिला! पहले 'डेटा लोड करें' बटन दबाएं।");
-                return;
-            }
-            
-            const syncBtn = document.getElementById('syncBtn');
-            const progressDiv = document.getElementById('syncProgress');
-            const progressFill = document.getElementById('progressFill');
-            const statusDiv = document.getElementById('syncStatus');
-            
-            syncBtn.disabled = true;
-            progressDiv.style.display = 'block';
-            statusDiv.innerHTML = '<div class="status">⏳ Supabase में डेटा सेव हो रहा है...</div>';
-            
-            let officerId = currentUser.officerId || currentUser.id;
-            if (currentUser.role === 'admin') officerId = 'admin';
-            
-            // Add officer_id to all data
-            const usersWithOfficer = {};
-            for (let [id, u] of Object.entries(localUsers)) {
-                usersWithOfficer[id] = { ...u, officer_id: officerId };
-            }
-            
-            const loansWithOfficer = {};
-            for (let [id, l] of Object.entries(localLoans)) {
-                loansWithOfficer[id] = { ...l, officer_id: officerId };
-            }
-            
-            const ledgerWithOfficer = {};
-            for (let [id, e] of Object.entries(localLedger)) {
-                ledgerWithOfficer[id] = { ...e, officer_id: officerId };
-            }
-            
-            const finesWithOfficer = {};
-            for (let [id, f] of Object.entries(localFines)) {
-                finesWithOfficer[id] = { ...f, officer_id: officerId };
-            }
-            
-            // Upload in batches
-            const allItems = [
-                ...Object.entries(usersWithOfficer).map(([id, data]) => ({ table: 'users', id, data })),
-                ...Object.entries(loansWithOfficer).map(([id, data]) => ({ table: 'loans', id, data })),
-                ...Object.entries(ledgerWithOfficer).map(([id, data]) => ({ table: 'ledger', id, data })),
-                ...Object.entries(finesWithOfficer).map(([id, data]) => ({ table: 'fines', id, data }))
-            ];
-            
-            let successCount = 0;
-            let errorCount = 0;
-            
-            for (let i = 0; i < allItems.length; i++) {
-                const item = allItems[i];
-                const progress = (i / allItems.length) * 100;
-                progressFill.style.width = `${progress}%`;
+
+        function loadFromIndexedDB() {
+            return new Promise((resolve) => {
+                const request = indexedDB.open('HLBFinanceDB', 1);
                 
-                try {
-                    const { error } = await supabaseClient
-                        .from(item.table)
-                        .upsert(item.data, { onConflict: 'id' });
+                request.onerror = () => resolve(false);
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
                     
-                    if (error) {
-                        console.error(`Error uploading ${item.table}/${item.id}:`, error);
-                        errorCount++;
+                    if (!db.objectStoreNames.contains('appData')) {
+                        resolve(false);
+                        return;
+                    }
+                    
+                    const transaction = db.transaction(['appData'], 'readonly');
+                    const store = transaction.objectStore('appData');
+                    
+                    const getUsers = store.get('loan_users');
+                    const getOfficers = store.get('loan_officers');
+                    const getLoans = store.get('loan_loans');
+                    const getLedger = store.get('loan_ledger');
+                    const getFines = store.get('loan_fines');
+                    
+                    let completed = 0;
+                    function checkComplete() {
+                        completed++;
+                        if (completed === 5) {
+                            resolve(true);
+                        }
+                    }
+                    
+                    getUsers.onsuccess = () => { localData.users = getUsers.result || {}; checkComplete(); };
+                    getOfficers.onsuccess = () => { localData.officers = getOfficers.result || {}; checkComplete(); };
+                    getLoans.onsuccess = () => { localData.loans = getLoans.result || {}; checkComplete(); };
+                    getLedger.onsuccess = () => { localData.ledger = getLedger.result || {}; checkComplete(); };
+                    getFines.onsuccess = () => { localData.fines = getFines.result || {}; checkComplete(); };
+                };
+            });
+        }
+
+        async function uploadToSupabase() {
+            let results = {
+                users: 0, loans: 0, ledger: 0, fines: 0,
+                totalSuccess: 0, totalFail: 0
+            };
+            
+            const totalItems = Object.keys(localData.users).length + 
+                             Object.keys(localData.loans).length + 
+                             Object.keys(localData.ledger).length + 
+                             Object.keys(localData.fines).length;
+            
+            let processed = 0;
+            
+            // Upload users
+            for (let [id, item] of Object.entries(localData.users)) {
+                try {
+                    if (!item.officer_id) item.officer_id = 'Prakash';
+                    const { error } = await supabase.from('users').upsert({ id: id, ...item });
+                    if (!error) {
+                        results.users++;
+                        results.totalSuccess++;
                     } else {
-                        successCount++;
+                        results.totalFail++;
                     }
                 } catch(e) {
-                    errorCount++;
+                    results.totalFail++;
                 }
-                
-                // Update status every 10 items
-                if (i % 10 === 0) {
-                    statusDiv.innerHTML = `<div class="status">⏳ प्रगति: ${i}/${allItems.items} (${Math.round(progress)}%)</div>`;
+                processed++;
+                updateProgress(30 + (processed / totalItems) * 60, `⏳ अपलोड: ${results.totalSuccess} सफल, ${results.totalFail} फेल`);
+            }
+            
+            // Upload loans
+            for (let [id, item] of Object.entries(localData.loans)) {
+                try {
+                    if (!item.officer_id) item.officer_id = 'Prakash';
+                    const { error } = await supabase.from('loans').upsert({ id: id, ...item });
+                    if (!error) {
+                        results.loans++;
+                        results.totalSuccess++;
+                    } else {
+                        results.totalFail++;
+                    }
+                } catch(e) {
+                    results.totalFail++;
                 }
+                processed++;
+                updateProgress(30 + (processed / totalItems) * 60, `⏳ अपलोड: ${results.totalSuccess} सफल, ${results.totalFail} फेल`);
             }
             
-            progressFill.style.width = '100%';
-            statusDiv.innerHTML = `<div class="status success">✅ सिंक पूरा! ${successCount} आइटम सेव हुए, ${errorCount} फेल।</div>`;
-            syncBtn.disabled = false;
-            document.getElementById('verifyStep').style.display = 'block';
-            
-            if (errorCount === 0) {
-                alert(`🎉 सभी ${successCount} डेटा Supabase में सेव हो गए!\nअब आप किसी भी डिवाइस से लॉगिन करके अपना डेटा देख सकते हैं।`);
-            } else {
-                alert(`⚠️ ${successCount} आइटम सेव हुए, ${errorCount} फेल रहे। कृपया दोबारा try करें।`);
-            }
-        }
-        
-        async function verifySupabaseData() {
-            if (!supabaseClient) {
-                alert("Supabase initialize नहीं हुआ!");
-                return;
-            }
-            
-            const statusDiv = document.getElementById('verifyStatus');
-            statusDiv.innerHTML = '<div class="status">⏳ Supabase से डेटा चेक हो रहा है...</div>';
-            
-            try {
-                const officerId = currentUser.officerId || currentUser.id;
-                const filterId = currentUser.role === 'admin' ? 'admin' : officerId;
-                
-                const { data: usersData } = await supabaseClient.from('users').select('*').eq('officer_id', filterId);
-                const { data: loansData } = await supabaseClient.from('loans').select('*').eq('officer_id', filterId);
-                const { data: ledgerData } = await supabaseClient.from('ledger').select('*').eq('officer_id', filterId);
-                
-                statusDiv.innerHTML = `<div class="status success">
-                    ✅ Supabase वेरिफिकेशन पूरा!<br>
-                    📊 ग्राहक: ${usersData?.length || 0}<br>
-                    📊 लोन: ${loansData?.length || 0}<br>
-                    📊 कलेक्शन: ${ledgerData?.length || 0}
-                </div>`;
-                
-                if (usersData?.length > 0) {
-                    alert(`✅ सब ठीक है!\nSupabase में ${usersData.length} ग्राहक, ${loansData.length} लोन सेव हैं।\nअब आप अपने ऐप का नया वर्जन use कर सकते हैं।`);
+            // Upload ledger
+            for (let [id, item] of Object.entries(localData.ledger)) {
+                try {
+                    if (!item.officer_id) item.officer_id = 'Prakash';
+                    const { error } = await supabase.from('ledger').upsert({ id: id, ...item });
+                    if (!error) {
+                        results.ledger++;
+                        results.totalSuccess++;
+                    } else {
+                        results.totalFail++;
+                    }
+                } catch(e) {
+                    results.totalFail++;
                 }
-            } catch(e) {
-                statusDiv.innerHTML = `<div class="status error">❌ Error: ${e.message}</div>`;
+                processed++;
+                updateProgress(30 + (processed / totalItems) * 60, `⏳ अपलोड: ${results.totalSuccess} सफल, ${results.totalFail} फेल`);
             }
+            
+            // Upload fines
+            for (let [id, item] of Object.entries(localData.fines)) {
+                try {
+                    if (!item.officer_id) item.officer_id = 'Prakash';
+                    const { error } = await supabase.from('fines').upsert({ id: id, ...item });
+                    if (!error) {
+                        results.fines++;
+                        results.totalSuccess++;
+                    } else {
+                        results.totalFail++;
+                    }
+                } catch(e) {
+                    results.totalFail++;
+                }
+                processed++;
+                updateProgress(30 + (processed / totalItems) * 60, `⏳ अपलोड: ${results.totalSuccess} सफल, ${results.totalFail} फेल`);
+            }
+            
+            return results;
         }
     </script>
 </body>
