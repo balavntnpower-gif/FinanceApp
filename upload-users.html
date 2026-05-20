@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Users Uploader - HLB Finance</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .sub {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .config-box {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .config-box label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+        .config-box input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .config-box button {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        .config-box button:hover {
+            background: #219a52;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+        .users-list {
+            margin-top: 20px;
+        }
+        .user-card {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #27ae60;
+        }
+        .user-card strong {
+            color: #2c3e50;
+        }
+        .user-card .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        .badge.admin {
+            background: #e74c3c;
+            color: white;
+        }
+        .badge.officer {
+            background: #3498db;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-upload {
+            background: #8e44ad;
+            margin-top: 20px;
+        }
+        .btn-clear {
+            background: #e74c3c;
+        }
+        .flex-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .flex-buttons button {
+            flex: 1;
+        }
+        .json-preview {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .sync-status {
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #27ae60;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 HLB Finance</h1>
+    <div class="sub">Supabase Users Uploader Tool</div>
+
+    <div class="config-box">
+        <label>🔗 Supabase URL</label>
+        <input type="text" id="supabaseUrl" value="https://yueczbqnjydymxyxfqbp.supabase.co" readonly>
+        <label>🔑 Supabase Anon Key</label>
+        <input type="text" id="supabaseAnonKey" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1ZWN6YnFuanlkeW14eXhmcWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzcwNzEsImV4cCI6MjA5NDg1MzA3MX0.kvRgOi_ElUopxrCKoCK-kItlDktuvphBVRG8Ad_raJY" readonly>
+        <button onclick="testConnection()">🔌 Test Connection</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <h3>📋 Users from users.json</h3>
+    <div id="usersList" class="users-list"></div>
+
+    <div class="flex-buttons">
+        <button onclick="uploadToSupabase()" id="uploadBtn" class="btn-upload" style="background:#27ae60;">📤 Upload to Supabase</button>
+        <button onclick="clearSupabaseUsers()" id="clearBtn" class="btn-clear">🗑️ Clear All Users</button>
+    </div>
+
+    <div class="flex-buttons">
+        <button onclick="syncFromSupabase()" style="background:#3498db;">📥 Sync from Supabase</button>
+        <button onclick="viewCurrentUsers()" style="background:#f39c12;">👁️ View Current Users</button>
+    </div>
+
+    <div id="jsonPreview" class="json-preview" style="display:none;"></div>
+    <div id="currentUsersTable" style="margin-top: 20px;"></div>
+    <div class="sync-status" id="syncStatus"></div>
+</div>
+
+<script>
+    let supabaseClient = null;
+    let usersData = null;
+
+    // Users data from your JSON
+    const USERS_FROM_JSON = {
+        "Rudra": {
+            "password": "Admin@123",
+            "role": "admin",
+            "expiry": "2026-12-31",
+            "name": "रुद्र"
+        },
+        "Prakash": {
+            "password": "Prakash",
+            "role": "officer",
+            "expiry": "2026-07-15",
+            "name": "प्रकाश"
+        },
+        "Omprakash": {
+            "password": "om@123",
+            "role": "officer",
+            "expiry": "2026-08-31",
+            "name": "ओमप्रकाश"
+        },
+        "ChandanSingh": {
+            "password": "Chandan",
+            "role": "officer",
+            "expiry": "2026-12-31",
+            "name": "चंदन सिंह"
+        }
+    };
+
+    function initSupabase() {
+        const url = document.getElementById('supabaseUrl').value;
+        const key = document.getElementById('supabaseAnonKey').value;
+        if (typeof supabase !== 'undefined') {
+            supabaseClient = supabase.createClient(url, key);
+            console.log("✅ Supabase initialized");
+            return true;
+        }
+        return false;
+    }
+
+    function showStatus(message, type) {
+        const statusDiv = document.getElementById('status');
+        statusDiv.textContent = message;
+        statusDiv.className = `status ${type}`;
+        setTimeout(() => {
+            if (type !== 'error') {
+                statusDiv.style.display = 'none';
+            }
+        }, 5000);
+    }
+
+    function displayUsersList() {
+        const container = document.getElementById('usersList');
+        let html = '<table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Password</th><th>Expiry</th></tr></thead><tbody>';
+        for (const [username, user] of Object.entries(USERS_FROM_JSON)) {
+            html += `<tr>
+                <td><strong>${username}</strong></td>
+                <td>${user.name}</td>
+                <td><span class="badge ${user.role}">${user.role === 'admin' ? '👑 एडमिन' : '👤 ऑफिसर'}</span></td>
+                <td>${user.password}</td>
+                <td>${user.expiry}</td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    async function testConnection() {
+        if (!initSupabase()) {
+            showStatus("❌ Supabase library not loaded! Please check internet.", "error");
+            return;
+        }
+        showStatus("🔄 Testing connection...", "info");
+        try {
+            const { data, error } = await supabaseClient.from('officers').select('count', { count: 'exact', head: true });
+            if (error) throw error;
+            showStatus("✅ Connection successful! Supabase is working.", "success");
+        } catch (err) {
+            showStatus(`❌ Connection failed: ${err.message}`, "error");
+        }
+    }
+
+    async function uploadToSupabase() {
+        if (!initSupabase()) {
+            showStatus("❌ Supabase not initialized!", "error");
+            return;
+        }
+
+        const uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = 'Uploading... <span class="loader"></span>';
+        showStatus("🔄 Uploading users to Supabase...", "info");
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const [username, user] of Object.entries(USERS_FROM_JSON)) {
+            const officerData = {
+                id: username,
+                name: user.name,
+                username: username,
+                password: user.password,
+                role: user.role,
+                expiry: user.expiry,
+                mobile: user.mobile || '',
+                print_company_name: user.print_company_name || 'HLB FINANCE',
+                print_tagline: user.print_tagline || 'Powered By Hindu Lion Brothers',
+                created_date: new Date().toISOString().slice(0, 10)
+            };
+
+            try {
+                const { error } = await supabaseClient.from('officers').upsert(officerData, { onConflict: 'id' });
+                if (error) {
+                    console.error(`Error uploading ${username}:`, error);
+                    errorCount++;
+                } else {
+                    successCount++;
+                }
+            } catch (err) {
+                errorCount++;
+            }
+        }
+
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '📤 Upload to Supabase';
+        
+        if (errorCount === 0) {
+            showStatus(`✅ Successfully uploaded ${successCount} users to Supabase!`, "success");
+        } else {
+            showStatus(`⚠️ Uploaded: ${successCount}, Failed: ${errorCount}`, "error");
+        }
+        
+        viewCurrentUsers();
+    }
+
+    async function syncFromSupabase() {
+        if (!initSupabase()) {
+            showStatus("❌ Supabase not initialized!", "error");
+            return;
+        }
+        showStatus("🔄 Fetching users from Supabase...", "info");
+        try {
+            const { data, error } = await supabaseClient.from('officers').select('*');
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                let html = '<h3>📊 Current Users in Supabase</h3><table><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Expiry</th><th>Created</th></tr></thead><tbody>';
+                for (const officer of data) {
+                    html += `<tr>
+                        <td>${officer.id}</td>
+                        <td>${officer.name || '-'}</td>
+                        <td>${officer.role === 'admin' ? '👑 एडमिन' : '👤 ऑफिसर'}</td>
+                        <td>${officer.expiry || '-'}</td>
+                        <td>${officer.created_date || '-'}</td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+                document.getElementById('currentUsersTable').innerHTML = html;
+                showStatus(`✅ Found ${data.length} users in Supabase`, "success");
+            } else {
+                document.getElementById('currentUsersTable').innerHTML = '<p>No users found in Supabase</p>';
+                showStatus("ℹ️ No users found in Supabase", "info");
+            }
+        } catch (err) {
+            showStatus(`❌ Error: ${err.message}`, "error");
+        }
+    }
+
+    async function viewCurrentUsers() {
+        if (!initSupabase()) {
+            showStatus("❌ Supabase not initialized!", "error");
+            return;
+        }
+        try {
+            const { data, error } = await supabaseClient.from('officers').select('*');
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                let html = '<h3>📊 Users in Supabase</h3><table><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Expiry</th></tr></thead><tbody>';
+                for (const officer of data) {
+                    html += `<tr>
+                        <td>${officer.id}</td>
+                        <td>${officer.name || '-'}</td>
+                        <td>${officer.role === 'admin' ? '👑 एडमिन' : '👤 ऑफिसर'}</td>
+                        <td>${officer.expiry || '-'}</td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+                document.getElementById('currentUsersTable').innerHTML = html;
+            } else {
+                document.getElementById('currentUsersTable').innerHTML = '<p>No users in Supabase yet. Click "Upload to Supabase" to add them.</p>';
+            }
+        } catch (err) {
+            document.getElementById('currentUsersTable').innerHTML = `<p>Error: ${err.message}</p>`;
+        }
+    }
+
+    async function clearSupabaseUsers() {
+        if (!confirm("⚠️ WARNING: This will delete ALL users from Supabase! Are you sure?")) return;
+        if (!confirm("⚠️ FINAL WARNING: This action cannot be undone! Type 'DELETE' to confirm:")) {
+            const confirmation = prompt('Type "DELETE" to confirm:');
+            if (confirmation !== 'DELETE') {
+                showStatus("❌ Deletion cancelled", "info");
+                return;
+            }
+        }
+        
+        if (!initSupabase()) {
+            showStatus("❌ Supabase not initialized!", "error");
+            return;
+        }
+        
+        const clearBtn = document.getElementById('clearBtn');
+        clearBtn.disabled = true;
+        clearBtn.innerHTML = 'Deleting... <span class="loader"></span>';
+        showStatus("🔄 Deleting all users from Supabase...", "info");
+        
+        try {
+            const { data, error } = await supabaseClient.from('officers').delete().neq('id', 'dummy');
+            if (error) throw error;
+            showStatus("✅ All users deleted successfully!", "success");
+            document.getElementById('currentUsersTable').innerHTML = '';
+        } catch (err) {
+            showStatus(`❌ Error: ${err.message}`, "error");
+        } finally {
+            clearBtn.disabled = false;
+            clearBtn.innerHTML = '🗑️ Clear All Users';
+        }
+    }
+
+    // Initialize
+    displayUsersList();
+    initSupabase();
+    
+    // Auto test connection on load
+    setTimeout(() => {
+        testConnection();
+        viewCurrentUsers();
+    }, 1000);
+</script>
+</body>
+</html>
