@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
-    <title>HLB Finance - लोन मैनेजर</title>
+    <title>HLB Finance - लोन मैनेजर (Supabase)</title>
     <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        
+        /* Performance optimizations */
+        .modal, .login-container, .dashboard { will-change: transform, opacity; }
+        button, select, input { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        table { backface-visibility: hidden; transform: translateZ(0); }
+        .card, .stats-card { transform: translateZ(0); backface-visibility: hidden; }
         .login-container {
             display: flex;
             justify-content: center;
@@ -485,7 +493,6 @@
             align-items: center;
         }
         
-        /* Active Loans Table New Styles */
         .active-loans-table {
             width: 100%;
             border-collapse: collapse;
@@ -543,7 +550,6 @@
             background: #219a52;
         }
         
-        /* Inline Edit Styles */
         .inline-edit-input {
             width: 100px;
             padding: 4px;
@@ -572,7 +578,6 @@
             background-color: #fffacd;
         }
         
-        /* Action Dropdown Styles */
         .action-dropdown {
             position: relative;
             display: inline-block;
@@ -658,7 +663,6 @@
             display: inline-block;
         }
     </style>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -781,12 +785,7 @@
                     <div style="overflow-x: auto;">
                         <table class="active-loans-table" id="activeLoansTable">
                             <thead>
-                                <tr>
-                                    <th>ग्राहक</th>
-                                    <th>बाकी</th>
-                                    <th>प्रति दिन</th>
-                                    <th style="text-align:center;">▼</th>
-                                </tr>
+                                <tr><th>ग्राहक</th><th>बाकी</th><th>प्रति दिन</th><th style="text-align:center;">▼</th></tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
                         </table>
@@ -826,18 +825,9 @@
     <div class="modal-content" style="max-width:400px;">
         <span class="close" onclick="closeNewCustomerModal()">&times;</span>
         <h3>👤 नया ग्राहक</h3>
-        <div class="form-group">
-            <label>नाम *</label>
-            <input type="text" id="newCustomerName" placeholder="ग्राहक का नाम">
-        </div>
-        <div class="form-group">
-            <label>मोबाइल *</label>
-            <input type="text" id="newCustomerMobile" placeholder="मोबाइल नंबर">
-        </div>
-        <div class="form-group">
-            <label>पता *</label>
-            <input type="text" id="newCustomerAddress" placeholder="पता">
-        </div>
+        <div class="form-group"><label>नाम *</label><input type="text" id="newCustomerName" placeholder="ग्राहक का नाम"></div>
+        <div class="form-group"><label>मोबाइल *</label><input type="text" id="newCustomerMobile" placeholder="मोबाइल नंबर"></div>
+        <div class="form-group"><label>पता *</label><input type="text" id="newCustomerAddress" placeholder="पता"></div>
         <button onclick="createCustomerFromModal()" style="width:100%; background:#27ae60; padding:10px;">✅ ग्राहक बनाएं</button>
     </div>
 </div>
@@ -924,6 +914,11 @@
 </div>
 
 <script>
+    // Supabase Configuration
+    const SUPABASE_URL = "https://rpzjnwovtodacmfketbv.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_kJriBmx6xHInmmm5H5CJ3w_0iWgVSbt";
+    let supabaseClient = null;
+    
     const GITHUB_USERS_URL = "users.json";
     
     let users = {}, officers = {}, loans = {}, ledger = {}, fines = {};
@@ -964,6 +959,52 @@
             details: "Details", print: "Print", payment: "Payment", fine: "Fine", discount: "Discount", deleteLoan: "Delete Loan", deleteCustomer: "Delete Customer", edit: "Edit", delete: "Delete", editLoan: "Edit Loan"
         }
     };
+    
+    function initSupabase() {
+        if (typeof supabase === 'undefined') {
+            setTimeout(initSupabase, 500);
+            return;
+        }
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log("✅ Supabase initialized!");
+    }
+    
+    async function syncFromSupabase() {
+        if (!supabaseClient || !currentUser) return false;
+        try {
+            const { data: usersData } = await supabaseClient.from('users').select('*').eq('officer_id', currentUser.officerId || currentUser.id);
+            if (usersData) { users = {}; usersData.forEach(u => { users[u.id] = u; }); }
+            
+            const { data: loansData } = await supabaseClient.from('loans').select('*').eq('officer_id', currentUser.officerId || currentUser.id);
+            if (loansData) { loans = {}; loansData.forEach(l => { loans[l.id] = l; }); }
+            
+            const { data: ledgerData } = await supabaseClient.from('ledger').select('*').eq('officer_id', currentUser.officerId || currentUser.id);
+            if (ledgerData) { ledger = {}; ledgerData.forEach(l => { ledger[l.id] = l; }); }
+            
+            const { data: finesData } = await supabaseClient.from('fines').select('*').eq('officer_id', currentUser.officerId || currentUser.id);
+            if (finesData) { fines = {}; finesData.forEach(f => { fines[f.id] = f; }); }
+            
+            await saveDataToLocal();
+            refreshUI();
+            return true;
+        } catch(err) { console.error("Sync error:", err); return false; }
+    }
+    
+    async function saveToSupabase(table, data) {
+        if (!supabaseClient || !currentUser) return false;
+        try {
+            await supabaseClient.from(table).upsert(data, { onConflict: 'id' });
+            return true;
+        } catch(err) { return false; }
+    }
+    
+    async function syncToSupabase() {
+        if (!supabaseClient || !currentUser) return;
+        for (let [id, user] of Object.entries(users)) if (user.officer_id === (currentUser.officerId || currentUser.id)) await saveToSupabase('users', user);
+        for (let [id, loan] of Object.entries(loans)) if (loan.officer_id === (currentUser.officerId || currentUser.id)) await saveToSupabase('loans', loan);
+        for (let [id, entry] of Object.entries(ledger)) if (entry.officer_id === (currentUser.officerId || currentUser.id)) await saveToSupabase('ledger', entry);
+        for (let [id, fine] of Object.entries(fines)) if (fine.officer_id === (currentUser.officerId || currentUser.id)) await saveToSupabase('fines', fine);
+    }
     
     function changeLanguage() {
         currentLang = document.getElementById('languageSelect').value;
@@ -1053,12 +1094,19 @@
         }));
     }
 
-    function saveData() {
-        Promise.all([
+    async function saveDataToLocal() {
+        await Promise.all([
             dbSet('loan_users', users), dbSet('loan_officers', officers),
             dbSet('loan_loans', loans), dbSet('loan_ledger', ledger),
             dbSet('loan_fines', fines)
         ]).catch(err => console.error('saveData error:', err));
+    }
+    
+    function saveData() {
+        saveDataToLocal();
+        if (navigator.onLine && currentUser && supabaseClient) {
+            syncToSupabase();
+        }
     }
 
     function updateExpiryBadge(expiryDate) {
@@ -1279,6 +1327,7 @@
     }
 
     async function loadData() {
+        initSupabase();
         try {
             try { await openDB(); } catch (dbError) { console.warn('IndexedDB not available:', dbError); }
             let savedUsers, savedOfficers, savedLoans, savedLedger, savedFines;
@@ -1354,6 +1403,7 @@
                     if (currentUser.expiry) updateExpiryBadge(currentUser.expiry);
                     else updateExpiryBadge(null);
                     setTimeout(() => { checkAndShowReminder(); }, 5000);
+                    setTimeout(() => syncFromSupabase(), 1000);
                     return;
                 }
             }
@@ -1690,7 +1740,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                      </table>`;
+                       </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -1888,58 +1938,41 @@
         alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
     }
 
-    // Inline Edit Functions for Pay Edit
     function startInlineEdit(loanId, paymentId) {
         const entry = ledger[paymentId];
         if (!entry) return;
-        
         const row = document.getElementById(`payment-row-${paymentId}`);
         if (!row) return;
-        
-        // Store original values
         const originalAmount = entry.amount_paid;
         const originalDate = entry.date;
-        
-        // Create edit cells
         const amountCell = row.cells[2];
         const dateCell = row.cells[1];
         const actionCell = row.cells[4];
-        
         const parts = originalDate.split('/');
         const dateInputValue = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        
         amountCell.innerHTML = `<input type="number" id="edit-amount-${paymentId}" value="${originalAmount}" step="0.01" class="inline-edit-input" style="width:100px;">`;
         dateCell.innerHTML = `<input type="date" id="edit-date-${paymentId}" value="${dateInputValue}" class="inline-date-input">`;
         actionCell.innerHTML = `<button class="inline-save-btn" onclick="saveInlineEdit('${loanId}', '${paymentId}')">💾</button>
                                 <button class="inline-cancel-btn" onclick="cancelInlineEdit('${loanId}', '${paymentId}', ${originalAmount}, '${originalDate}')">✖️</button>`;
-        
         row.classList.add('editing-row');
     }
     
     function saveInlineEdit(loanId, paymentId) {
         const newAmount = parseFloat(document.getElementById(`edit-amount-${paymentId}`).value);
         const newDateInput = document.getElementById(`edit-date-${paymentId}`).value;
-        
         if (isNaN(newAmount) || newAmount <= 0) {
             alert('सही राशि डालें!');
             return;
         }
-        
         const parts = newDateInput.split('-');
         const newDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        
         const entry = ledger[paymentId];
         if (!entry) return;
-        
         const oldAmount = entry.amount_paid;
         const oldDate = entry.date;
-        
-        // Update ledger entry
         entry.amount_paid = newAmount;
         entry.date = newDate;
         ledger[paymentId] = entry;
-        
-        // Update loan remaining amount
         if (entry.loan_id && loans[entry.loan_id]) {
             const loan = loans[entry.loan_id];
             const diff = newAmount - oldAmount;
@@ -1952,7 +1985,6 @@
             }
             loans[entry.loan_id] = loan;
         }
-        
         saveData();
         refreshUI();
         alert(`✅ पेमेंट अपडेट!\n📅 ${oldDate} → ${newDate}\n💰 ₹${oldAmount.toLocaleString('en-IN')} → ₹${newAmount.toLocaleString('en-IN')}`);
@@ -1965,20 +1997,12 @@
     function openPaymentEditList(loanId) {
         const loan = loans[loanId];
         if (!loan) { alert('❌ लोन नहीं मिला!'); return; }
-        
-        const payments = Object.entries(ledger)
-            .filter(([id, e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct'))
-            .sort((a, b) => {
-                let da = a[1].date.split('/').reverse().join('-');
-                let db = b[1].date.split('/').reverse().join('-');
-                return new Date(da) - new Date(db);
-            });
-        
-        if (payments.length === 0) {
-            alert('📌 इस लोन पर अभी कोई पेमेंट नहीं है!');
-            return;
-        }
-        
+        const payments = Object.entries(ledger).filter(([id, e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct')).sort((a, b) => {
+            let da = a[1].date.split('/').reverse().join('-');
+            let db = b[1].date.split('/').reverse().join('-');
+            return new Date(da) - new Date(db);
+        });
+        if (payments.length === 0) { alert('📌 इस लोन पर अभी कोई पेमेंट नहीं है!'); return; }
         let tableRows = '';
         for (let i = 0; i < payments.length; i++) {
             const [ledgerId, entry] = payments[i];
@@ -1988,37 +2012,18 @@
                 <td>${entry.date}</td>
                 <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
                 <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
-                <td class="text-center">
-                    <button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button>
-                </td>
-               </tr>`;
+                <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button></td>
+            </tr>`;
         }
-        
-        const modalHtml = `
-            <div>
-                <div style="background:#f5f5f5; padding:10px; margin-bottom:12px; border-radius:6px;">
-                    <strong>📋 ग्राहक:</strong> ${loan.user_name}<br>
-                    <strong>💰 लोन टाइप:</strong> ${loan.type === 'day' ? 'दिन वाला' : 'महीने वाला'}<br>
-                    <strong>📌 कुल बकाया:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}
-                </div>
-                <h4 style="margin-bottom:10px;">📝 पेमेंट लिस्ट (${payments.length} entries)</h4>
-                <table class="payedit-table">
-                    <thead>
-                        <tr>
-                            <th style="width:40px; text-align:center;">#</th>
-                            <th style="text-align:left;">तारीख</th>
-                            <th style="text-align:right;">राशि (₹)</th>
-                            <th style="text-align:right;">डिस्काउंट</th>
-                            <th style="text-align:center; width:80px;">एक्शन</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+        const modalHtml = `<div>
+            <div style="background:#f5f5f5; padding:10px; margin-bottom:12px; border-radius:6px;">
+                <strong>📋 ग्राहक:</strong> ${loan.user_name}<br>
+                <strong>💰 लोन टाइप:</strong> ${loan.type === 'day' ? 'दिन वाला' : 'महीने वाला'}<br>
+                <strong>📌 कुल बकाया:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}
             </div>
-        `;
-        
+            <h4 style="margin-bottom:10px;">📝 पेमेंट लिस्ट (${payments.length} entries)</h4>
+            <table class="payedit-table"><thead><tr><th style="width:40px; text-align:center;">#</th><th style="text-align:left;">तारीख</th><th style="text-align:right;">राशि (₹)</th><th style="text-align:right;">डिस्काउंट</th><th style="text-align:center; width:80px;">एक्शन</th></tr></thead><tbody>${tableRows}</tbody></table>
+        </div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2070,9 +2075,7 @@
     function printLoanDetails(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
-        
         const printWindow = window.open('', '_blank');
-        
         const payments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct'));
         const principalClosure = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'principal_closure');
         const newLoanEntry = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'new_loan_from_principal');
@@ -2080,30 +2083,24 @@
         const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
         const customer = users[loan.user_id] || {};
         const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
-        
         let totalPaid = 0;
         for (let [id, p] of payments) totalPaid += p.amount_paid;
-        
         let companyName = officer.print_company_name || 'HLB FINANCE';
         let tagline = officer.print_tagline || 'Powered By Hindu Lion Brothers';
-        
         let allTransactions = [];
         for (let [id, p] of payments) allTransactions.push({ date: p.date, amount: p.amount_paid, type: 'जमा', discount: p.discount || 0 });
         for (let [id, p] of principalClosure) allTransactions.push({ date: p.date, amount: p.amount_paid, type: '🔒 मूलधन जमा', discount: 0 });
         for (let [id, p] of newLoanEntry) allTransactions.push({ date: p.date, amount: p.amount_paid, type: '🆕 नया लोन बना', discount: 0 });
         for (let [id, f] of finesList) allTransactions.push({ date: f.date, amount: f.amount, type: 'फाइन', discount: 0 });
         for (let [id, d] of discounts) allTransactions.push({ date: d.date, amount: d.discount, type: 'डिस्काउंट', discount: d.discount });
-        
         allTransactions.sort((a,b) => {
             let aParts = a.date.split('/');
             let bParts = b.date.split('/');
             return new Date(aParts[2], aParts[1]-1, aParts[0]) - new Date(bParts[2], bParts[1]-1, bParts[0]);
         });
-        
         let mid = Math.ceil(allTransactions.length / 2);
         let col1 = allTransactions.slice(0, mid);
         let col2 = allTransactions.slice(mid);
-        
         let remarkHtml = '';
         if (loan.remark) {
             remarkHtml = `<div style="background:#fef9e6; padding:8px; margin:8px 0; border-left:3px solid #f39c12; white-space:pre-line; font-family:monospace; font-size:9pt;">
@@ -2122,7 +2119,6 @@
                 <strong>📝 Remark:</strong><br>${loan.remark || `🔁 यह लोन पुराने लोन #${loan.previous_loan_id} से मूलधन जमा करके बनाया गया है।`}
             </div>`;
         }
-        
         const html = `<!DOCTYPE html>
         <html>
         <head>
@@ -2173,15 +2169,14 @@
                 ${remarkHtml}
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
-                    <div class="payment-column"> <table> <thead> <tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th> </tr> </thead> <tbody> ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')} ${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td>' : ''} </tbody> </table> </div>
-                    <div class="payment-column"> <table> <thead> <tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th> </tr> </thead> <tbody> ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')} ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''} </tbody> </table> </div>
+                    <div class="payment-column"> <table> <thead> <tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr> </thead> <tbody> ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')} ${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td>' : ''} </tbody> </table> </div>
+                    <div class="payment-column"> <table> <thead> <tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr> </thead> <tbody> ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')} ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''} </tbody> </table> </div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
             </div>
             <script> window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 800); }; <\/script>
         </body>
         </html>`;
-        
         printWindow.document.write(html);
         printWindow.document.close();
     }
@@ -2213,14 +2208,12 @@
         for (let i = 0; i < all.length; i++) {
             rows += `<tr style="text-align:center"><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
         }
-        
         let remarkHtml = '';
         if (loan.remark) {
             remarkHtml = `<div style="background:#fef9e6;padding:8px;margin-bottom:8px;border-radius:6px;border-left:3px solid #f39c12;white-space:pre-line;font-family:monospace;">
                 <strong>📝 Remark:</strong><br>${loan.remark}
             </div>`;
         }
-        
         const modalHtml = `<div><div style="background:#f5f5f5;padding:6px;margin-bottom:8px">
         <strong>ग्राहक:</strong> ${loan.user_name}<br>
         <strong>मोबाइल:</strong> ${customer.mobile || '-'}<br>
@@ -2497,19 +2490,13 @@
                     sections.forEach(s => s.classList.remove('active-section'));
                     document.querySelectorAll(`[data-section="${tabId}"]`).forEach(s => s.classList.add('active-section'));
                     if (tabId === 'alert') {
-                        setTimeout(() => {
-                            showOverdueAlert();
-                        }, 50);
-                    } else if (tabId === 'collection') {
-                        showCollectionByDate();
-                    }
+                        setTimeout(() => { showOverdueAlert(); }, 50);
+                    } else if (tabId === 'collection') { showCollectionByDate(); }
                 };
             });
             document.querySelectorAll('[data-section="stats"]').forEach(s => s.classList.add('active-section'));
             const activeTabBtn = document.querySelector('.tab-btn.active');
-            if (activeTabBtn && activeTabBtn.getAttribute('data-tab') === 'alert') {
-                showOverdueAlert();
-            }
+            if (activeTabBtn && activeTabBtn.getAttribute('data-tab') === 'alert') { showOverdueAlert(); }
         } else {
             sections.forEach(s => s.classList.add('active-section'));
             showOverdueAlert();
@@ -2519,9 +2506,7 @@
     function setupActiveLoansDropdown() {
         document.addEventListener('click', function(event) {
             if (!event.target.closest('.action-dropdown')) {
-                document.querySelectorAll('.action-dropdown').forEach(d => {
-                    d.classList.remove('active');
-                });
+                document.querySelectorAll('.action-dropdown').forEach(d => { d.classList.remove('active'); });
             }
         });
     }
@@ -2530,11 +2515,7 @@
         event.stopPropagation();
         const dropdown = event.currentTarget.parentElement;
         const allDropdowns = document.querySelectorAll('.action-dropdown');
-        allDropdowns.forEach(d => {
-            if (d !== dropdown) {
-                d.classList.remove('active');
-            }
-        });
+        allDropdowns.forEach(d => { if (d !== dropdown) { d.classList.remove('active'); } });
         dropdown.classList.toggle('active');
     };
 
@@ -2575,10 +2556,7 @@
                     customerDisplay = loan.user_name;
                 }
                 tbody.innerHTML += `<tr>
-                    <td class="customer-cell">
-                        <div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div>
-                        <div class="customer-principal">मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</div>
-                    </td>
+                    <td class="customer-cell"><div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div><div class="customer-principal" style="color: #2c3e50; font-weight: bold;">मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</div></td>
                     <td class="remaining-amount">₹${loan.remaining_amount.toLocaleString('en-IN')}</td>
                     <td class="per-day-amount">${perDayDisplay}</td>
                     <td style="text-align:center;">
@@ -2644,17 +2622,24 @@
         }
     }
 
+    let searchDebounce = null;
+    let collectionDebounce = null;
+    let loanSearchDebounce = null;
+    
     function setupSearch() {
         const inp = document.getElementById('searchInput');
         const sug = document.getElementById('searchSuggestions');
         inp.addEventListener('input', function() {
+            clearTimeout(searchDebounce);
             const q = this.value.toLowerCase();
             if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q) || u.mobile.includes(q));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
+            searchDebounce = setTimeout(() => {
+                let customers = Object.entries(users);
+                if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+                const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q) || u.mobile.includes(q));
+                if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
+                else sug.style.display = 'none';
+            }, 150);
         });
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
@@ -2663,15 +2648,18 @@
         const inp = document.getElementById('collectionNameInput');
         const sug = document.getElementById('collectionSuggestions');
         inp.addEventListener('input', function() {
+            clearTimeout(collectionDebounce);
             const q = this.value.toLowerCase();
             if (!q) { sug.style.display = 'none'; updateCollectionLoanSelect(); return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
-            if (matches.length) {
-                sug.style.display = 'block';
-                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCollectionCustomer('${u.name}')">${u.name} ${u.address ? '(' + u.address.substring(0, 20) + ')' : ''}</div>`).join('');
-            } else { sug.style.display = 'none'; updateCollectionLoanSelect(); }
+            collectionDebounce = setTimeout(() => {
+                let customers = Object.entries(users);
+                if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+                const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+                if (matches.length) {
+                    sug.style.display = 'block';
+                    sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCollectionCustomer('${u.name}')">${u.name} ${u.address ? '(' + u.address.substring(0, 20) + ')' : ''}</div>`).join('');
+                } else { sug.style.display = 'none'; updateCollectionLoanSelect(); }
+            }, 150);
         });
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
@@ -2680,13 +2668,16 @@
         const inp = document.getElementById('loanSearchInput');
         const sug = document.getElementById('loanSearchSuggestions');
         inp.addEventListener('input', function() {
+            clearTimeout(loanSearchDebounce);
             const q = this.value.toLowerCase();
             if (!q) { sug.style.display = 'none'; return; }
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectLoanCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '(' + u.address + ')' : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
+            loanSearchDebounce = setTimeout(() => {
+                let customers = Object.entries(users);
+                if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+                const matches = customers.filter(([id,u]) => u.name.toLowerCase().includes(q));
+                if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectLoanCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '(' + u.address + ')' : ''}</div>`).join(''); }
+                else sug.style.display = 'none';
+            }, 150);
         });
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
@@ -2717,19 +2708,15 @@
     function showOverdueAlert() {
         let overdueList = [];
         let today = new Date();
-        
         for (let [loanId, loan] of Object.entries(loans)) {
             if (currentUser && currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
-            
             if (loan.type === 'month' && loan.status === 'active') {
                 let lastPaymentDate = null;
                 for (let [id, entry] of Object.entries(ledger)) {
                     if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
                         let parts = entry.date.split('/');
                         let entryDate = new Date(parts[2], parts[1]-1, parts[0]);
-                        if (!lastPaymentDate || entryDate > lastPaymentDate) {
-                            lastPaymentDate = entryDate;
-                        }
+                        if (!lastPaymentDate || entryDate > lastPaymentDate) { lastPaymentDate = entryDate; }
                     }
                 }
                 if (!lastPaymentDate) {
@@ -2739,26 +2726,14 @@
                 let diffDays = Math.floor((today - lastPaymentDate) / (1000 * 60 * 60 * 24));
                 if (diffDays >= 30) {
                     let customer = users[loan.user_id] || {};
-                    overdueList.push({
-                        loanId: loanId,
-                        customerName: loan.user_name,
-                        customerMobile: customer.mobile || '-',
-                        customerAddress: customer.address || '-',
-                        daysOverdue: diffDays,
-                        remainingAmount: loan.remaining_amount,
-                        loanStartDate: loan.start_date,
-                        userId: loan.user_id
-                    });
+                    overdueList.push({ loanId: loanId, customerName: loan.user_name, customerMobile: customer.mobile || '-', customerAddress: customer.address || '-', daysOverdue: diffDays, remainingAmount: loan.remaining_amount, loanStartDate: loan.start_date, userId: loan.user_id });
                 }
             }
         }
-        
         overdueList.sort((a, b) => a.daysOverdue - b.daysOverdue);
-        
         let alertHtml = '';
-        if (overdueList.length === 0) {
-            alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>';
-        } else {
+        if (overdueList.length === 0) { alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>'; }
+        else {
             for (let item of overdueList) {
                 alertHtml += `<div class="alert-item">
                     <div><strong>👤 ${item.customerName}</strong> <span class="alert-days">${item.daysOverdue} दिन</span></div>
@@ -2771,7 +2746,6 @@
                 </div>`;
             }
         }
-        
         const alertDiv = document.getElementById('alertList');
         if (alertDiv) alertDiv.innerHTML = alertHtml;
     }
@@ -2963,6 +2937,43 @@
         navigator.serviceWorker.register('sw.js').catch(e => console.log('SW:', e));
     }
     
+    async function updateOnlineStatus() {
+        const indicator = document.getElementById('offlineIndicator');
+        if (navigator.onLine) {
+            indicator.textContent = '✅ Online';
+            indicator.classList.add('online');
+            indicator.style.display = 'block';
+            setTimeout(() => { indicator.style.display = 'none'; }, 3000);
+            console.log('📡 App is now ONLINE - syncing...');
+            if (currentUser && supabaseClient) {
+                await syncFromSupabase();
+            }
+            trySync();
+        } else {
+            indicator.textContent = '📡 Offline Mode';
+            indicator.classList.remove('online');
+            indicator.style.display = 'block';
+            console.log('📡 App is OFFLINE');
+        }
+    }
+    
+    async function trySync() {
+        if (!navigator.onLine) return;
+        try {
+            const usersData = await fetchUsersFromGitHub();
+            if (usersData && usersData.users) {
+                console.log('✅ Users data synced from server');
+                for (let [username, userData] of Object.entries(usersData.users)) {
+                    if (userData.role === 'officer') {
+                        officers[username] = { name: userData.name, password: userData.password, role: userData.role, expiry: userData.expiry, print_company_name: userData.print_company_name || 'HLB FINANCE', print_tagline: userData.print_tagline || 'Powered By Hindu Lion Brothers' };
+                    }
+                }
+                await dbSet('loan_officers', officers);
+                console.log('✅ Officer data updated and saved');
+            }
+        } catch (error) { console.warn('Sync failed (will retry later):', error); }
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
         setupSearch();
         setupCollectionSearch();
@@ -2971,40 +2982,6 @@
         document.getElementById('loginPassword').addEventListener('keypress', e => { if(e.key === 'Enter') checkLogin(); });
         currentLang = document.getElementById('languageSelect').value;
         for (let key in translations[currentLang]) { const el = document.getElementById(key); if (el) el.innerText = translations[currentLang][key]; }
-        
-        function updateOnlineStatus() {
-            const indicator = document.getElementById('offlineIndicator');
-            if (navigator.onLine) {
-                indicator.textContent = '✅ Online';
-                indicator.classList.add('online');
-                indicator.style.display = 'block';
-                setTimeout(() => { indicator.style.display = 'none'; }, 3000);
-                console.log('📡 App is now ONLINE - syncing...');
-                trySync();
-            } else {
-                indicator.textContent = '📡 Offline Mode';
-                indicator.classList.remove('online');
-                indicator.style.display = 'block';
-                console.log('📡 App is OFFLINE');
-            }
-        }
-        
-        async function trySync() {
-            if (!navigator.onLine) return;
-            try {
-                const usersData = await fetchUsersFromGitHub();
-                if (usersData && usersData.users) {
-                    console.log('✅ Users data synced from server');
-                    for (let [username, userData] of Object.entries(usersData.users)) {
-                        if (userData.role === 'officer') {
-                            officers[username] = { name: userData.name, password: userData.password, role: userData.role, expiry: userData.expiry, print_company_name: userData.print_company_name || 'HLB FINANCE', print_tagline: userData.print_tagline || 'Powered By Hindu Lion Brothers' };
-                        }
-                    }
-                    await dbSet('loan_officers', officers);
-                    console.log('✅ Officer data updated and saved');
-                }
-            } catch (error) { console.warn('Sync failed (will retry later):', error); }
-        }
         
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
