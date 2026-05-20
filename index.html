@@ -784,7 +784,8 @@
                                 <tr><th>ग्राहक</th><th>बाकी</th><th>प्रति दिन</th><th style="text-align:center;">▼</th></tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
-                         </div>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -909,7 +910,7 @@
 </div>
 
 <script>
-    // ✅ आपका Supabase क्रेडेंशियल (अपडेटेड)
+    // ✅ Supabase Configuration
     const SUPABASE_URL = "https://yueczbqnjydymxyxfqbp.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1ZWN6YnFuanlkeW14eXhmcWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzcwNzEsImV4cCI6MjA5NDg1MzA3MX0.kvRgOi_ElUopxrCKoCK-kItlDktuvphBVRG8Ad_raJY";
     
@@ -1512,7 +1513,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                    </tr>`;
+                     </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -1777,73 +1778,81 @@
         selectCustomer(userId, trimmedName);
     }
     
+    // ✅ यह है सही DELETE FUNCTION - FIXED VERSION
     async function deleteCustomer(userId, userName) {
-    if (!confirm(`क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\n⚠️ ध्यान दें: इस ग्राहक के सभी लोन, कलेक्शन, फाइन भी डिलीट हो जाएंगे!`)) return;
-    
-    // सबसे पहले इस ग्राहक के सभी लोन के IDs collect करें
-    const customerLoans = [];
-    for (let [loanId, loan] of Object.entries(loans)) {
-        if (loan.user_id === userId) {
-            customerLoans.push(loanId);
+        if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
+            return;
         }
-    }
-    
-    // 1. Ledger से डिलीट (कलेक्शन)
-    for (let [ledgerId, entry] of Object.entries(ledger)) {
-        if (entry.user_id === userId) {
-            delete ledger[ledgerId];
-            // Supabase से डिलीट
-            if (supabaseClient) {
-                await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+        
+        try {
+            // 1. इस ग्राहक के सभी लोन के IDs collect करें
+            const customerLoans = [];
+            for (let [loanId, loan] of Object.entries(loans)) {
+                if (loan.user_id === userId) {
+                    customerLoans.push(loanId);
+                }
             }
-        }
-    }
-    
-    // 2. Fines से डिलीट
-    for (let [fineId, fine] of Object.entries(fines)) {
-        if (fine.user_id === userId) {
-            delete fines[fineId];
-            if (supabaseClient) {
-                await supabaseClient.from('fines').delete().eq('id', fineId);
+            
+            // 2. Ledger (कलेक्शन) डिलीट करें
+            for (let [ledgerId, entry] of Object.entries(ledger)) {
+                if (entry.user_id === userId) {
+                    delete ledger[ledgerId];
+                    if (supabaseClient) {
+                        await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+                    }
+                }
             }
+            
+            // 3. Fines डिलीट करें
+            for (let [fineId, fine] of Object.entries(fines)) {
+                if (fine.user_id === userId) {
+                    delete fines[fineId];
+                    if (supabaseClient) {
+                        await supabaseClient.from('fines').delete().eq('id', fineId);
+                    }
+                }
+            }
+            
+            // 4. Loans डिलीट करें
+            for (let loanId of customerLoans) {
+                delete loans[loanId];
+                if (supabaseClient) {
+                    await supabaseClient.from('loans').delete().eq('id', loanId);
+                }
+            }
+            
+            // 5. User डिलीट करें
+            delete users[userId];
+            if (supabaseClient) {
+                const { error } = await supabaseClient.from('users').delete().eq('id', userId);
+                if (error) {
+                    console.error("Supabase delete error:", error);
+                    alert("⚠️ Supabase से डिलीट करते समय error आया, लेकिन Local डेटा डिलीट हो गया।");
+                } else {
+                    console.log("✅ User deleted from Supabase successfully");
+                }
+            }
+            
+            // 6. Local Storage/IndexedDB में सेव करें
+            await saveDataToLocal();
+            
+            // 7. UI रिफ्रेश करें
+            refreshUI();
+            
+            // 8. सर्च रिजल्ट और इनपुट क्लियर करें
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResult').innerHTML = '';
+            if (currentSelectedUserId === userId) {
+                currentSelectedUserId = null;
+            }
+            
+            alert(`✅ "${userName}" पूरी तरह डिलीट हो गया!\n\n🗑️ ${customerLoans.length} लोन और उनके सभी कलेक्शन भी डिलीट हो गए।`);
+            
+        } catch (err) {
+            console.error("Delete error:", err);
+            alert("❌ डिलीट करते समय error आया: " + err.message);
         }
     }
-    
-    // 3. Loans से डिलीट
-    for (let loanId of customerLoans) {
-        delete loans[loanId];
-        if (supabaseClient) {
-            await supabaseClient.from('loans').delete().eq('id', loanId);
-        }
-    }
-    
-    // 4. Users से डिलीट
-    delete users[userId];
-    if (supabaseClient) {
-        const { error } = await supabaseClient.from('users').delete().eq('id', userId);
-        if (error) {
-            console.error("Supabase delete error:", error);
-            alert("⚠️ Supabase से डिलीट करते समय error आया, लेकिन Local डेटा डिलीट हो गया।");
-        } else {
-            console.log("✅ User deleted from Supabase successfully");
-        }
-    }
-    
-    // 5. Local Storage/IndexedDB में सेव करें
-    await saveDataToLocal();
-    
-    // 6. UI रिफ्रेश करें
-    refreshUI();
-    
-    // 7. सर्च रिजल्ट और इनपुट क्लियर करें
-    document.getElementById('searchInput').value = '';
-    document.getElementById('searchResult').innerHTML = '';
-    if (currentSelectedUserId === userId) {
-        currentSelectedUserId = null;
-    }
-    
-    alert(`✅ "${userName}" पूरी तरह डिलीट हो गया!\n\n🗑️ ${customerLoans.length} लोन और उनके सभी कलेक्शन भी डिलीट हो गए।`);
-}
     
     function openPaymentModal(loanId) {
         const loan = loans[loanId];
@@ -2104,7 +2113,7 @@
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
                     <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td></tr>' : ''}</tbody></table></div>
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td></tr>' : ''}</tbody></table></div>
+                    <div class="payment-column"><tr><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
             </div>
@@ -2561,7 +2570,7 @@
         const file = input.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
                 if (data.users) Object.assign(users, data.users);
@@ -2569,7 +2578,8 @@
                 if (data.loans) Object.assign(loans, data.loans);
                 if (data.ledger) Object.assign(ledger, data.ledger);
                 if (data.fines) Object.assign(fines, data.fines);
-                saveData();
+                await saveDataToLocal();
+                if (supabaseClient) await syncToSupabase();
                 refreshUI();
                 alert('✅ बैकअप रिस्टोर हो गया!');
             } catch(err) { alert('❌ गलत फाइल!'); }
@@ -2581,7 +2591,7 @@
         const file = document.getElementById('restoreFileLogin').files[0];
         if (!file) { alert('कोई फ़ाइल नहीं चुनी!'); return; }
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
                 if (data.users) users = data.users;
@@ -2589,7 +2599,8 @@
                 if (data.loans) loans = data.loans;
                 if (data.ledger) ledger = data.ledger;
                 if (data.fines) fines = data.fines;
-                saveData();
+                await saveDataToLocal();
+                if (supabaseClient) await syncToSupabase();
                 document.getElementById('loginError').innerText = '✅ रिस्टोर हो गया! अब लॉगिन करें';
                 alert('✅ बैकअप रिस्टोर हो गया!\nअब login करें।');
             } catch(err) { alert('❌ गलत फाइल!'); }
