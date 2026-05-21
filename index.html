@@ -232,15 +232,85 @@
         .receipt-slip .r-amount { font-weight:bold; font-size:16px; text-align:center; margin:4px 0; }
         .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
         .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
+        
+        /* ========== FIXED PRINT CSS - A4 TWO COLUMNS ========== */
         @media print {
-            @page { size: A4; margin: 15mm; }
-            body * { visibility: hidden; }
-            .print-container, .print-container * { visibility: visible; }
-            .print-container { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; }
-            .no-print, button, .header, .card, .modal, .bottom-tabs, .logout-btn, .lang-selector, .user-info { display: none !important; }
-            table { page-break-inside: avoid; }
-            .loan-summary { page-break-inside: avoid; }
+            @page {
+                size: A4;
+                margin: 10mm 8mm;
+            }
+            body * {
+                visibility: hidden;
+            }
+            .print-container, 
+            .print-container * {
+                visibility: visible;
+            }
+            .print-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                margin: 0;
+                padding: 10px;
+            }
+            .print-two-columns {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+                page-break-inside: avoid;
+            }
+            .print-column {
+                page-break-inside: avoid;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            .avoid-break {
+                page-break-inside: avoid;
+            }
+            .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 9pt;
+                margin-bottom: 10px;
+            }
+            .print-table th,
+            .print-table td {
+                border: 1px solid #aaa;
+                padding: 4px 6px;
+                text-align: left;
+            }
+            .print-table th {
+                background: #27ae60;
+                color: white;
+            }
+            .print-header {
+                text-align: center;
+                margin-bottom: 15px;
+                border-bottom: 2px solid #000;
+                padding-bottom: 8px;
+            }
+            .print-footer {
+                text-align: center;
+                margin-top: 15px;
+                font-size: 8pt;
+                border-top: 1px solid #ccc;
+                padding-top: 5px;
+            }
+            .no-print, 
+            button, 
+            .header, 
+            .card, 
+            .modal, 
+            .bottom-tabs, 
+            .logout-btn, 
+            .lang-selector, 
+            .user-info {
+                display: none !important;
+            }
         }
+        
         .backup-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
         .date-input { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .date-input input { flex: 1; }
@@ -658,6 +728,29 @@
             font-size: 10px;
             display: inline-block;
         }
+        
+        /* Sync status styles */
+        .sync-progress {
+            width: 100%;
+            background: #ddd;
+            border-radius: 3px;
+            margin-top: 4px;
+            display: none;
+        }
+        .sync-progress-bar {
+            width: 0%;
+            height: 4px;
+            background: #27ae60;
+            border-radius: 3px;
+        }
+        .sync-status-div {
+            font-size: 10px;
+            margin-top: 8px;
+            padding: 5px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -734,6 +827,27 @@
                     </div>
                     <p style="font-size:9px; color:gray; margin-top:2px;" id="restoreInfo">JSON फाइल से डाटा रिस्टोर</p>
                 </div>
+                <!-- ========== NEW SUPABASE SYNC CARD ========== -->
+                <div class="card">
+                    <h3>☁️ Supabase Sync</h3>
+                    <div class="backup-buttons">
+                        <button onclick="syncIndexedDBToSupabase()" style="background:#8e44ad;" id="syncToSupabaseBtn">
+                            📤 IndexedDB → Supabase
+                        </button>
+                        <button onclick="syncSupabaseToIndexedDB()" style="background:#2980b9;" id="syncFromSupabaseBtn">
+                            📥 Supabase → IndexedDB
+                        </button>
+                        <button onclick="showSyncStatus()" style="background:#27ae60;" id="syncStatusBtn">
+                            🔄 Sync Status
+                        </button>
+                    </div>
+                    <div id="syncStatusDiv" class="sync-status-div">
+                        <span id="syncMessage"></span>
+                        <div id="syncProgress" class="sync-progress">
+                            <div id="syncProgressBar" class="sync-progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="tab-section" data-section="collection">
@@ -784,7 +898,7 @@
                                 <tr><th>ग्राहक</th><th>बाकी</th><th>प्रति दिन</th><th style="text-align:center;">▼</th></tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
-                        </table>
+                        寸able
                     </div>
                 </div>
             </div>
@@ -1010,6 +1124,290 @@
         }
         for (let [id, officer] of Object.entries(officers)) {
             await saveToSupabase('officers', officer);
+        }
+    }
+    
+    // ============ SUPABASE SYNC FUNCTIONS (NEW) ============
+    
+    async function syncIndexedDBToSupabase() {
+        if (!supabaseClient) {
+            alert("❌ Supabase कनेक्ट नहीं है! पहले login करें।");
+            return;
+        }
+        
+        if (!currentUser) {
+            alert("❌ पहले login करें!");
+            return;
+        }
+        
+        const syncBtn = document.getElementById('syncToSupabaseBtn');
+        const statusDiv = document.getElementById('syncStatusDiv');
+        const statusMsg = document.getElementById('syncMessage');
+        const progressDiv = document.getElementById('syncProgress');
+        const progressBar = document.getElementById('syncProgressBar');
+        
+        syncBtn.disabled = true;
+        syncBtn.innerText = "⏳ Syncing...";
+        statusDiv.style.display = "block";
+        statusMsg.innerText = "🔄 IndexedDB से डेटा पढ़ रहा हूँ...";
+        progressDiv.style.display = "block";
+        progressBar.style.width = "0%";
+        
+        try {
+            // IndexedDB से सारा डेटा लोड करें
+            const [savedUsers, savedOfficers, savedLoans, savedLedger, savedFines] = await Promise.all([
+                dbGet('loan_users'), dbGet('loan_officers'), 
+                dbGet('loan_loans'), dbGet('loan_ledger'), dbGet('loan_fines')
+            ]);
+            
+            const dataToSync = {
+                users: savedUsers || {},
+                officers: savedOfficers || {},
+                loans: savedLoans || {},
+                ledger: savedLedger || {},
+                fines: savedFines || {}
+            };
+            
+            const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
+            
+            // Total items count
+            let totalItems = 0;
+            let syncedItems = 0;
+            
+            if (dataToSync.users) totalItems += Object.keys(dataToSync.users).length;
+            if (dataToSync.officers && currentUser.role === 'admin') totalItems += Object.keys(dataToSync.officers).length;
+            if (dataToSync.loans) totalItems += Object.keys(dataToSync.loans).length;
+            if (dataToSync.ledger) totalItems += Object.keys(dataToSync.ledger).length;
+            if (dataToSync.fines) totalItems += Object.keys(dataToSync.fines).length;
+            
+            // Sync Users
+            if (dataToSync.users) {
+                statusMsg.innerText = `📤 Users syncing... (${syncedItems}/${totalItems})`;
+                progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                
+                for (let [id, user] of Object.entries(dataToSync.users)) {
+                    if (currentUser.role === 'admin' || user.officer_id === officerId) {
+                        await saveToSupabase('users', user);
+                        syncedItems++;
+                        progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                    }
+                }
+            }
+            
+            // Sync Officers (only for admin)
+            if (dataToSync.officers && currentUser.role === 'admin') {
+                statusMsg.innerText = `📤 Officers syncing... (${syncedItems}/${totalItems})`;
+                for (let [id, officer] of Object.entries(dataToSync.officers)) {
+                    await saveToSupabase('officers', officer);
+                    syncedItems++;
+                    progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                }
+            }
+            
+            // Sync Loans
+            if (dataToSync.loans) {
+                statusMsg.innerText = `📤 Loans syncing... (${syncedItems}/${totalItems})`;
+                for (let [id, loan] of Object.entries(dataToSync.loans)) {
+                    if (currentUser.role === 'admin' || loan.officer_id === officerId) {
+                        await saveToSupabase('loans', loan);
+                        syncedItems++;
+                        progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                    }
+                }
+            }
+            
+            // Sync Ledger
+            if (dataToSync.ledger) {
+                statusMsg.innerText = `📤 Ledger entries syncing... (${syncedItems}/${totalItems})`;
+                for (let [id, entry] of Object.entries(dataToSync.ledger)) {
+                    if (currentUser.role === 'admin' || entry.officer_id === officerId) {
+                        await saveToSupabase('ledger', entry);
+                        syncedItems++;
+                        progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                    }
+                }
+            }
+            
+            // Sync Fines
+            if (dataToSync.fines) {
+                statusMsg.innerText = `📤 Fines syncing... (${syncedItems}/${totalItems})`;
+                for (let [id, fine] of Object.entries(dataToSync.fines)) {
+                    if (currentUser.role === 'admin' || fine.officer_id === officerId) {
+                        await saveToSupabase('fines', fine);
+                        syncedItems++;
+                        progressBar.style.width = (syncedItems / totalItems) * 100 + "%";
+                    }
+                }
+            }
+            
+            statusMsg.innerHTML = `✅ Sync Complete! ${syncedItems}/${totalItems} items synced to Supabase.`;
+            progressBar.style.width = "100%";
+            setTimeout(() => { progressDiv.style.display = "none"; }, 2000);
+            
+            alert(`✅ Sync Successful!\n📊 ${syncedItems} items synced to Supabase.\n🕐 ${new Date().toLocaleString()}`);
+            
+        } catch (err) {
+            console.error("Sync error:", err);
+            statusMsg.innerHTML = `❌ Error: ${err.message}`;
+            alert("❌ Sync failed: " + err.message);
+        } finally {
+            syncBtn.disabled = false;
+            syncBtn.innerText = "📤 IndexedDB → Supabase";
+            setTimeout(() => { statusDiv.style.display = "none"; }, 5000);
+        }
+    }
+    
+    async function syncSupabaseToIndexedDB() {
+        if (!supabaseClient) {
+            alert("❌ Supabase कनेक्ट नहीं है!");
+            return;
+        }
+        
+        if (!currentUser) {
+            alert("❌ पहले login करें!");
+            return;
+        }
+        
+        const syncBtn = document.getElementById('syncFromSupabaseBtn');
+        const statusDiv = document.getElementById('syncStatusDiv');
+        const statusMsg = document.getElementById('syncMessage');
+        const progressDiv = document.getElementById('syncProgress');
+        const progressBar = document.getElementById('syncProgressBar');
+        
+        syncBtn.disabled = true;
+        syncBtn.innerText = "⏳ Syncing...";
+        statusDiv.style.display = "block";
+        statusMsg.innerText = "🔄 Supabase से डेटा ला रहा हूँ...";
+        progressDiv.style.display = "block";
+        progressBar.style.width = "30%";
+        
+        try {
+            const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
+            
+            let usersData = { data: [] };
+            let officersData = { data: [] };
+            let loansData = { data: [] };
+            let ledgerData = { data: [] };
+            let finesData = { data: [] };
+            
+            // Fetch data from Supabase
+            statusMsg.innerText = "📥 Fetching from Supabase...";
+            progressBar.style.width = "50%";
+            
+            let queryUsers = supabaseClient.from('users').select('*');
+            let queryLoans = supabaseClient.from('loans').select('*');
+            let queryLedger = supabaseClient.from('ledger').select('*');
+            let queryFines = supabaseClient.from('fines').select('*');
+            let queryOfficers = supabaseClient.from('officers').select('*');
+            
+            if (officerId && currentUser.role !== 'admin') {
+                queryUsers = queryUsers.eq('officer_id', officerId);
+                queryLoans = queryLoans.eq('officer_id', officerId);
+                queryLedger = queryLedger.eq('officer_id', officerId);
+                queryFines = queryFines.eq('officer_id', officerId);
+            }
+            
+            [usersData, loansData, ledgerData, finesData, officersData] = await Promise.all([
+                queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
+            ]);
+            
+            statusMsg.innerText = "💾 Saving to IndexedDB...";
+            progressBar.style.width = "75%";
+            
+            // Clear existing data and save new
+            if (usersData.data && usersData.data.length) {
+                users = {};
+                usersData.data.forEach(u => { users[u.id] = u; });
+            }
+            
+            if (loansData.data && loansData.data.length) {
+                loans = {};
+                loansData.data.forEach(l => { loans[l.id] = l; });
+            }
+            
+            if (ledgerData.data && ledgerData.data.length) {
+                ledger = {};
+                ledgerData.data.forEach(l => { ledger[l.id] = l; });
+            }
+            
+            if (finesData.data && finesData.data.length) {
+                fines = {};
+                finesData.data.forEach(f => { fines[f.id] = f; });
+            }
+            
+            if (officersData.data && officersData.data.length && currentUser.role === 'admin') {
+                officers = {};
+                officersData.data.forEach(o => { officers[o.id] = o; });
+            }
+            
+            await saveDataToLocal();
+            
+            statusMsg.innerHTML = `✅ Sync Complete! Downloaded from Supabase.`;
+            progressBar.style.width = "100%";
+            setTimeout(() => { progressDiv.style.display = "none"; }, 2000);
+            
+            refreshUI();
+            alert(`✅ Sync Successful!\n📥 Downloaded from Supabase.\n🕐 ${new Date().toLocaleString()}`);
+            
+        } catch (err) {
+            console.error("Sync error:", err);
+            statusMsg.innerHTML = `❌ Error: ${err.message}`;
+            alert("❌ Sync failed: " + err.message);
+        } finally {
+            syncBtn.disabled = false;
+            syncBtn.innerText = "📥 Supabase → IndexedDB";
+            setTimeout(() => { statusDiv.style.display = "none"; }, 5000);
+        }
+    }
+    
+    function showSyncStatus() {
+        const statusDiv = document.getElementById('syncStatusDiv');
+        const statusMsg = document.getElementById('syncMessage');
+        
+        statusDiv.style.display = "block";
+        
+        if (!supabaseClient) {
+            statusMsg.innerHTML = "⚠️ Supabase client not initialized. Please login first.";
+            setTimeout(() => { statusDiv.style.display = "none"; }, 3000);
+            return;
+        }
+        
+        if (!currentUser) {
+            statusMsg.innerHTML = "⚠️ Please login first.";
+            setTimeout(() => { statusDiv.style.display = "none"; }, 3000);
+            return;
+        }
+        
+        statusMsg.innerHTML = "🔍 Checking connection...";
+        
+        // Test Supabase connection
+        supabaseClient.from('users').select('count', { count: 'exact', head: true })
+            .then(({ count, error }) => {
+                if (error) {
+                    statusMsg.innerHTML = `❌ Supabase connection error: ${error.message}`;
+                } else {
+                    const localUsers = Object.keys(users).length;
+                    const localLoans = Object.keys(loans).length;
+                    const localLedger = Object.keys(ledger).length;
+                    
+                    statusMsg.innerHTML = `
+                        ✅ Connected to Supabase!<br>
+                        📊 Local: ${localUsers} users, ${localLoans} loans, ${localLedger} ledger entries<br>
+                        🔄 Last sync: Click sync buttons to transfer data
+                    `;
+                }
+                setTimeout(() => { statusDiv.style.display = "none"; }, 5000);
+            })
+            .catch(err => {
+                statusMsg.innerHTML = `❌ Cannot connect to Supabase: ${err.message}`;
+                setTimeout(() => { statusDiv.style.display = "none"; }, 5000);
+            });
+    }
+    
+    function updateProgressBar(percent) {
+        const progressBar = document.getElementById('syncProgressBar');
+        if (progressBar) {
+            progressBar.style.width = percent + "%";
         }
     }
     
@@ -1513,7 +1911,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         </td>
-                     </tr>`;
+                      </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -1778,14 +2176,13 @@
         selectCustomer(userId, trimmedName);
     }
     
-    // ✅ यह है सही DELETE FUNCTION - FIXED VERSION
+    // ✅ DELETE FUNCTION
     async function deleteCustomer(userId, userName) {
         if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
             return;
         }
         
         try {
-            // 1. इस ग्राहक के सभी लोन के IDs collect करें
             const customerLoans = [];
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.user_id === userId) {
@@ -1793,7 +2190,6 @@
                 }
             }
             
-            // 2. Ledger (कलेक्शन) डिलीट करें
             for (let [ledgerId, entry] of Object.entries(ledger)) {
                 if (entry.user_id === userId) {
                     delete ledger[ledgerId];
@@ -1803,7 +2199,6 @@
                 }
             }
             
-            // 3. Fines डिलीट करें
             for (let [fineId, fine] of Object.entries(fines)) {
                 if (fine.user_id === userId) {
                     delete fines[fineId];
@@ -1813,7 +2208,6 @@
                 }
             }
             
-            // 4. Loans डिलीट करें
             for (let loanId of customerLoans) {
                 delete loans[loanId];
                 if (supabaseClient) {
@@ -1821,7 +2215,6 @@
                 }
             }
             
-            // 5. User डिलीट करें
             delete users[userId];
             if (supabaseClient) {
                 const { error } = await supabaseClient.from('users').delete().eq('id', userId);
@@ -1833,13 +2226,9 @@
                 }
             }
             
-            // 6. Local Storage/IndexedDB में सेव करें
             await saveDataToLocal();
-            
-            // 7. UI रिफ्रेश करें
             refreshUI();
             
-            // 8. सर्च रिजल्ट और इनपुट क्लियर करें
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResult').innerHTML = '';
             if (currentSelectedUserId === userId) {
@@ -2029,10 +2418,11 @@
     
     function cancelInlineEdit(loanId, paymentId, originalAmount, originalDate) { refreshUI(); }
     
+    // ============ FIXED PRINT FUNCTION - TWO COLUMNS FOR A4 ============
     function printLoanDetails(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
-        const printWindow = window.open('', '_blank');
+        
         const payments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct'));
         const principalClosure = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'principal_closure');
         const newLoanEntry = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'new_loan_from_principal');
@@ -2040,66 +2430,183 @@
         const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
         const customer = users[loan.user_id] || {};
         const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
+        
         let totalPaid = 0;
         for (let [id, p] of payments) totalPaid += p.amount_paid;
-        let companyName = officer.print_company_name || 'HLB FINANCE';
-        let tagline = officer.print_tagline || 'Powered By Hindu Lion Brothers';
+        
         let allTransactions = [];
         for (let [id, p] of payments) allTransactions.push({ date: p.date, amount: p.amount_paid, type: 'जमा', discount: p.discount || 0 });
         for (let [id, p] of principalClosure) allTransactions.push({ date: p.date, amount: p.amount_paid, type: '🔒 मूलधन जमा', discount: 0 });
         for (let [id, p] of newLoanEntry) allTransactions.push({ date: p.date, amount: p.amount_paid, type: '🆕 नया लोन बना', discount: 0 });
         for (let [id, f] of finesList) allTransactions.push({ date: f.date, amount: f.amount, type: 'फाइन', discount: 0 });
         for (let [id, d] of discounts) allTransactions.push({ date: d.date, amount: d.discount, type: 'डिस्काउंट', discount: d.discount });
+        
         allTransactions.sort((a,b) => {
             let aParts = a.date.split('/');
             let bParts = b.date.split('/');
             return new Date(aParts[2], aParts[1]-1, aParts[0]) - new Date(bParts[2], bParts[1]-1, bParts[0]);
         });
-        let mid = Math.ceil(allTransactions.length / 2);
-        let col1 = allTransactions.slice(0, mid);
-        let col2 = allTransactions.slice(mid);
-        let remarkHtml = '';
-        if (loan.remark) {
-            remarkHtml = `<div style="background:#fef9e6; padding:8px; margin:8px 0; border-left:3px solid #f39c12; white-space:pre-line; font-family:monospace; font-size:9pt;">
-                <strong>📝 Remark:</strong><br>${loan.remark}
-            </div>`;
-        }
+        
+        // Split into two columns for A4
+        const mid = Math.ceil(allTransactions.length / 2);
+        const col1 = allTransactions.slice(0, mid);
+        const col2 = allTransactions.slice(mid);
+        
+        let companyName = officer.print_company_name || 'HLB FINANCE';
+        let tagline = officer.print_tagline || 'Powered By Hindu Lion Brothers';
+        
+        const printWindow = window.open('', '_blank');
+        
+        const remarkHtml = loan.remark ? `<div style="background:#fef9e6; padding:8px; margin:8px 0; border-left:3px solid #f39c12; white-space:pre-line; font-family:monospace; font-size:8pt;">
+            <strong>📝 Remark:</strong><br>${loan.remark}
+        </div>` : '';
+        
         const html = `<!DOCTYPE html>
         <html>
-        <head><meta charset="UTF-8"><title>लोन विवरण - ${loan.user_name}</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', 'Arial', sans-serif; background: white; margin: 0; padding: 0; width: 8in; margin: 0 auto; }
-            @media print { body { width: 8in; margin: 0 auto; padding: 0; } @page { size: 8in auto; margin: 0.1in; } }
-            .print-container { width: 100%; font-size: 9pt; }
-            .header { text-align: left; margin-bottom: 8px; border-bottom: 2px solid #27ae60; padding-bottom: 6px; }
-            .header h1 { font-size: 14pt; color: #2c3e50; margin-bottom: 2px; }
-            .header .powered { font-size: 7pt; color: #666; }
-            .customer-details { background: #f5f5f5; padding: 8px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #27ae60; }
-            .detail-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 4px; }
-            .detail-item { min-width: 180px; font-size: 8pt; }
-            .detail-item strong { color: #2c3e50; min-width: 100px; display: inline-block; }
-            .loan-summary { background: #e8f5e9; padding: 8px; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 10px; font-size: 8pt; border-radius: 4px; border: 1px solid #c8e6c9; }
-            .loan-summary span { font-weight: 500; background: white; padding: 2px 8px; border-radius: 15px; }
-            .section-title { font-size: 10pt; margin: 10px 0 8px 0; color: #27ae60; font-weight: bold; border-left: 3px solid #27ae60; padding-left: 8px; }
-            .two-columns { display: flex; gap: 20px; margin-top: 5px; flex-wrap: wrap; }
-            .payment-column { flex: 1; min-width: 200px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }
-            th, td { border: 1px solid #aaa; padding: 4px 4px; text-align: left; }
-            th { background: #27ae60; color: white; font-weight: bold; }
-            .text-right { text-align: right; }
-            .text-center { text-align: center; }
-            .footer { margin-top: 10px; text-align: center; font-size: 6pt; border-top: 1px solid #ccc; padding-top: 6px; color: #666; }
-            .remark-card { background: #fef9e6; padding: 6px; margin: 6px 0; border-left: 3px solid #f39c12; font-size: 7pt; white-space: pre-line; }
-        </style>
+        <head>
+            <meta charset="UTF-8">
+            <title>लोन विवरण - ${loan.user_name}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                @media print {
+                    @page { size: A4; margin: 10mm 8mm; }
+                    body { margin: 0; padding: 0; }
+                }
+                body {
+                    font-family: 'Segoe UI', 'Arial', sans-serif;
+                    background: white;
+                    font-size: 9pt;
+                    padding: 5px;
+                }
+                .print-container {
+                    width: 100%;
+                }
+                .print-header {
+                    text-align: center;
+                    margin-bottom: 12px;
+                    border-bottom: 2px solid #27ae60;
+                    padding-bottom: 8px;
+                }
+                .print-header h1 {
+                    font-size: 16pt;
+                    color: #2c3e50;
+                    margin-bottom: 2px;
+                }
+                .print-header .sub {
+                    font-size: 8pt;
+                    color: #666;
+                }
+                .customer-details {
+                    background: #f5f5f5;
+                    padding: 8px;
+                    margin-bottom: 10px;
+                    border-radius: 4px;
+                    border-left: 3px solid #27ae60;
+                }
+                .detail-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 5px;
+                }
+                .detail-item {
+                    min-width: 180px;
+                }
+                .detail-item strong {
+                    min-width: 100px;
+                    display: inline-block;
+                }
+                .loan-summary {
+                    background: #e8f5e9;
+                    padding: 8px;
+                    margin: 10px 0;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    border-radius: 4px;
+                    border: 1px solid #c8e6c9;
+                }
+                .loan-summary span {
+                    background: white;
+                    padding: 3px 10px;
+                    border-radius: 15px;
+                    font-size: 8.5pt;
+                }
+                .section-title {
+                    font-size: 10pt;
+                    margin: 10px 0 6px 0;
+                    color: #27ae60;
+                    font-weight: bold;
+                    border-left: 3px solid #27ae60;
+                    padding-left: 8px;
+                }
+                .two-columns {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 15px;
+                    margin-top: 5px;
+                }
+                .payment-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 7.5pt;
+                    margin-bottom: 10px;
+                }
+                .payment-table th, 
+                .payment-table td {
+                    border: 1px solid #aaa;
+                    padding: 4px 4px;
+                    text-align: left;
+                }
+                .payment-table th {
+                    background: #27ae60;
+                    color: white;
+                    font-weight: bold;
+                }
+                .text-right {
+                    text-align: right;
+                }
+                .text-center {
+                    text-align: center;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    font-size: 7pt;
+                    border-top: 1px solid #ccc;
+                    padding-top: 5px;
+                    color: #666;
+                }
+                .remark-card {
+                    background: #fef9e6;
+                    padding: 6px;
+                    margin: 6px 0;
+                    border-left: 3px solid #f39c12;
+                    font-size: 7pt;
+                    white-space: pre-line;
+                }
+            </style>
         </head>
         <body>
             <div class="print-container">
-                <div class="header"><h1>${companyName}</h1><div class="powered">${tagline}</div></div>
-                <div class="customer-details">
-                    <div class="detail-row"><div class="detail-item"><strong>नाम:</strong> ${loan.user_name}</div><div class="detail-item"><strong>मोबाइल:</strong> ${customer.mobile || '-'}</div><div class="detail-item"><strong>पता:</strong> ${customer.address || '-'}</div></div>
-                    <div class="detail-row"><div class="detail-item"><strong>Agent:</strong> ${officer.name}</div><div class="detail-item"><strong>लोन तारीख:</strong> ${loan.start_date}</div><div class="detail-item"><strong>ब्याज दर:</strong> ${loan.interest_rate}%</div></div>
+                <div class="print-header">
+                    <h1>${companyName}</h1>
+                    <div class="sub">${tagline}</div>
                 </div>
+                
+                <div class="customer-details">
+                    <div class="detail-row">
+                        <div class="detail-item"><strong>नाम:</strong> ${loan.user_name}</div>
+                        <div class="detail-item"><strong>मोबाइल:</strong> ${customer.mobile || '-'}</div>
+                        <div class="detail-item"><strong>पता:</strong> ${customer.address || '-'}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-item"><strong>Agent:</strong> ${officer.name}</div>
+                        <div class="detail-item"><strong>लोन तारीख:</strong> ${loan.start_date}</div>
+                        <div class="detail-item"><strong>ब्याज दर:</strong> ${loan.interest_rate}%</div>
+                    </div>
+                </div>
+                
                 <div class="loan-summary">
                     <span>📌 मूलधन: ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}</span>
                     <span>📈 ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')}</span>
@@ -2109,17 +2616,73 @@
                     <span>💵 जमा: ₹${totalPaid.toLocaleString('en-IN')}</span>
                     <span><strong>📌 बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></span>
                 </div>
+                
                 ${remarkHtml}
+                
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
+                
                 <div class="two-columns">
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td></tr>' : ''}</tbody></table></div>
-                    <div class="payment-column"><tr><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
+                    <div class="print-column">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">#</th>
+                                    <th>तारीख</th>
+                                    <th>प्रकार</th>
+                                    <th class="text-right">राशि (₹)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${col1.map((t, idx) => `
+                                <tr>
+                                    <td class="text-center">${idx+1}</td>
+                                    <td>${t.date}</td>
+                                    <td>${t.type}</td>
+                                    <td class="text-right">${t.amount.toLocaleString('en-IN')}</td>
+                                </tr>
+                                `).join('')}
+                                ${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="print-column">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">#</th>
+                                    <th>तारीख</th>
+                                    <th>प्रकार</th>
+                                    <th class="text-right">राशि (₹)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${col2.map((t, idx) => `
+                                <tr>
+                                    <td class="text-center">${col1.length + idx + 1}</td>
+                                    <td>${t.date}</td>
+                                    <td>${t.type}</td>
+                                    <td class="text-right">${t.amount.toLocaleString('en-IN')}</td>
+                                </tr>
+                                `).join('')}
+                                ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
+                
+                <div class="footer">
+                    प्रिंट तिथि: ${getTodayDate()} | ${companyName}
+                </div>
             </div>
-            <script> window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 800); }; <\/script>
+            <script>
+                window.onload = function() { 
+                    window.print(); 
+                    setTimeout(function() { window.close(); }, 800); 
+                };
+            <\/script>
         </body>
         </html>`;
+        
         printWindow.document.write(html);
         printWindow.document.close();
     }
@@ -2149,7 +2712,7 @@
         });
         let rows = '';
         for (let i = 0; i < all.length; i++) {
-            rows += `<tr style="text-align:center"><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
+            rows += `<tr style="text-align:center"><tr>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
         }
         let remarkHtml = '';
         if (loan.remark) {
