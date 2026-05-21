@@ -69,6 +69,7 @@
         .user-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .role-badge { background: #27ae60; padding: 3px 8px; border-radius: 15px; font-size: 10px; }
         .logout-btn { background: #e74c3c; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 12px; }
+        .refresh-data-btn { background: #3498db; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 11px; margin-left: 5px; }
         .lang-selector { background: rgba(255,255,255,0.2); padding: 3px 6px; border-radius: 6px; border: none; color: white; cursor: pointer; font-size: 11px; }
         .lang-selector option { background: #2c3e50; color: white; }
         .two-columns { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
@@ -233,7 +234,6 @@
         .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
         .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
         
-        /* 🖨️ FIXED PRINT STYLES - A4 TWO COLUMNS ALIGNMENT */
         @media print {
             @page { size: A4; margin: 10mm; }
             body * { visibility: hidden; }
@@ -249,7 +249,6 @@
             .no-print, button, .header, .card, .modal, .bottom-tabs, .logout-btn, .lang-selector, .user-info { display: none !important; }
             table { page-break-inside: avoid; }
             .loan-summary { page-break-inside: avoid; }
-            /* Two columns layout fix */
             .print-container .two-columns {
                 display: flex !important;
                 flex-direction: row !important;
@@ -700,6 +699,17 @@
             font-size: 10px;
             display: inline-block;
         }
+        
+        .sync-status {
+            font-size: 9px;
+            background: rgba(0,0,0,0.2);
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+        .sync-status.synced { background: #27ae60; }
+        .sync-status.pending { background: #f39c12; }
+        .sync-status.error { background: #e74c3c; }
     </style>
 </head>
 <body>
@@ -731,6 +741,8 @@
         <div class="user-info">
             <span class="role-badge" id="userRoleBadge"></span>
             <span id="userNameDisplay"></span>
+            <span id="syncStatus" class="sync-status">🔄 सिन्क...</span>
+            <button class="refresh-data-btn" onclick="hardRefreshData()" title="Supabase से ताज़ा डेटा लोड करें">🔄 रिफ्रेश</button>
             <select id="languageSelect" class="lang-selector" onchange="changeLanguage()"><option value="hi">हिंदी</option><option value="en">English</option></select>
             <button class="logout-btn" onclick="logout()">लॉगआउट</button>
         </div>
@@ -974,8 +986,31 @@
     const STORE_NAME = 'appData';
     let db = null;
     
+    function updateSyncStatus(status, message) {
+        const statusEl = document.getElementById('syncStatus');
+        if (statusEl) {
+            statusEl.className = 'sync-status ' + status;
+            statusEl.innerText = message || (status === 'synced' ? '✅ सिन्क' : status === 'pending' ? '⏳ पेंडिंग' : '❌ एरर');
+        }
+    }
+    
+    async function hardRefreshData() {
+        if (!supabaseClient || !currentUser) {
+            alert("Supabase कनेक्ट नहीं है!");
+            return;
+        }
+        updateSyncStatus('pending', '🔄 लोड हो रहा...');
+        const success = await syncFromSupabase(true);
+        if (success) {
+            alert("✅ डेटा ताज़ा हो गया!");
+        } else {
+            alert("❌ डेटा लोड करने में एरर! कृपया इंटरनेट चेक करें।");
+        }
+    }
+    
     function initSupabase() {
         if (typeof supabase === 'undefined') {
+            console.log("⏳ Waiting for Supabase library...");
             setTimeout(initSupabase, 500);
             return;
         }
@@ -983,8 +1018,40 @@
         console.log("✅ Supabase initialized!");
     }
     
-    async function syncFromSupabase() {
+    async function saveToSupabase(table, data) {
         if (!supabaseClient || !currentUser) return false;
+        try {
+            const { error } = await supabaseClient.from(table).upsert(data, { onConflict: 'id' });
+            if (error) {
+                console.error(`Error saving to ${table}:`, error);
+                updateSyncStatus('error', '❌ सेव नहीं');
+                return false;
+            }
+            console.log(`✅ Saved to ${table}:`, data.id);
+            return true;
+        } catch(err) { 
+            console.error(`Exception saving to ${table}:`, err);
+            return false; 
+        }
+    }
+    
+    async function deleteFromSupabase(table, id) {
+        if (!supabaseClient || !currentUser) return false;
+        try {
+            const { error } = await supabaseClient.from(table).delete().eq('id', id);
+            if (error) console.error(`Error deleting from ${table}:`, error);
+            return !error;
+        } catch(err) { return false; }
+    }
+    
+    async function syncFromSupabase(forceRefresh = false) {
+        if (!supabaseClient || !currentUser) {
+            console.log("No supabase client or user, skipping sync");
+            return false;
+        }
+        
+        updateSyncStatus('pending', '🔄 सिन्क...');
+        
         try {
             const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
             
@@ -1005,29 +1072,39 @@
                 queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
             ]);
             
-            if (usersData.data) { users = {}; usersData.data.forEach(u => { users[u.id] = u; }); }
-            if (loansData.data) { loans = {}; loansData.data.forEach(l => { loans[l.id] = l; }); }
-            if (ledgerData.data) { ledger = {}; ledgerData.data.forEach(l => { ledger[l.id] = l; }); }
-            if (finesData.data) { fines = {}; finesData.data.forEach(f => { fines[f.id] = f; }); }
-            if (officersData.data) { officers = {}; officersData.data.forEach(o => { officers[o.id] = o; }); }
+            if (usersData.error) console.error("Users fetch error:", usersData.error);
+            else if (usersData.data) { users = {}; usersData.data.forEach(u => { users[u.id] = u; }); }
+            
+            if (loansData.error) console.error("Loans fetch error:", loansData.error);
+            else if (loansData.data) { loans = {}; loansData.data.forEach(l => { loans[l.id] = l; }); }
+            
+            if (ledgerData.error) console.error("Ledger fetch error:", ledgerData.error);
+            else if (ledgerData.data) { ledger = {}; ledgerData.data.forEach(l => { ledger[l.id] = l; }); }
+            
+            if (finesData.error) console.error("Fines fetch error:", finesData.error);
+            else if (finesData.data) { fines = {}; finesData.data.forEach(f => { fines[f.id] = f; }); }
+            
+            if (officersData.error) console.error("Officers fetch error:", officersData.error);
+            else if (officersData.data) { officers = {}; officersData.data.forEach(o => { officers[o.id] = o; }); }
             
             await saveDataToLocal();
             refreshUI();
+            updateSyncStatus('synced', '✅ सिन्क');
             return true;
-        } catch(err) { console.error("Sync error:", err); return false; }
-    }
-    
-    async function saveToSupabase(table, data) {
-        if (!supabaseClient || !currentUser) return false;
-        try {
-            const { error } = await supabaseClient.from(table).upsert(data, { onConflict: 'id' });
-            if (error) console.error(`Error saving to ${table}:`, error);
-            return !error;
-        } catch(err) { return false; }
+        } catch(err) { 
+            console.error("Sync error:", err); 
+            updateSyncStatus('error', '❌ सिन्क नहीं');
+            return false; 
+        }
     }
     
     async function syncToSupabase() {
         if (!supabaseClient || !currentUser) return;
+        if (!navigator.onLine) {
+            console.log("Offline, skipping sync");
+            return;
+        }
+        
         const officerId = currentUser.officerId || currentUser.id;
         
         for (let [id, user] of Object.entries(users)) {
@@ -1168,7 +1245,7 @@
     function saveData() {
         saveDataToLocal();
         if (navigator.onLine && currentUser && supabaseClient) {
-            syncToSupabase();
+            syncToSupabase().catch(err => console.error("Sync error:", err));
         }
     }
     
@@ -1554,7 +1631,7 @@
                             <button class="edit-officer small" onclick="editOfficer('${id}')">✏️</button>
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
-                        </td>
+                        <\/td>
                       </tr>`;
         }
         html += '</tbody></table>';
@@ -1820,14 +1897,12 @@
         selectCustomer(userId, trimmedName);
     }
     
-    // ✅ यह है सही DELETE FUNCTION - FIXED VERSION
     async function deleteCustomer(userId, userName) {
         if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
             return;
         }
         
         try {
-            // 1. इस ग्राहक के सभी लोन के IDs collect करें
             const customerLoans = [];
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.user_id === userId) {
@@ -1835,53 +1910,43 @@
                 }
             }
             
-            // 2. Ledger (कलेक्शन) डिलीट करें
+            // Delete ledger entries
             for (let [ledgerId, entry] of Object.entries(ledger)) {
                 if (entry.user_id === userId) {
                     delete ledger[ledgerId];
                     if (supabaseClient) {
-                        await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+                        await deleteFromSupabase('ledger', ledgerId);
                     }
                 }
             }
             
-            // 3. Fines डिलीट करें
+            // Delete fines
             for (let [fineId, fine] of Object.entries(fines)) {
                 if (fine.user_id === userId) {
                     delete fines[fineId];
                     if (supabaseClient) {
-                        await supabaseClient.from('fines').delete().eq('id', fineId);
+                        await deleteFromSupabase('fines', fineId);
                     }
                 }
             }
             
-            // 4. Loans डिलीट करें
+            // Delete loans
             for (let loanId of customerLoans) {
                 delete loans[loanId];
                 if (supabaseClient) {
-                    await supabaseClient.from('loans').delete().eq('id', loanId);
+                    await deleteFromSupabase('loans', loanId);
                 }
             }
             
-            // 5. User डिलीट करें
+            // Delete user
             delete users[userId];
             if (supabaseClient) {
-                const { error } = await supabaseClient.from('users').delete().eq('id', userId);
-                if (error) {
-                    console.error("Supabase delete error:", error);
-                    alert("⚠️ Supabase से डिलीट करते समय error आया, लेकिन Local डेटा डिलीट हो गया।");
-                } else {
-                    console.log("✅ User deleted from Supabase successfully");
-                }
+                await deleteFromSupabase('users', userId);
             }
             
-            // 6. Local Storage/IndexedDB में सेव करें
             await saveDataToLocal();
-            
-            // 7. UI रिफ्रेश करें
             refreshUI();
             
-            // 8. सर्च रिजल्ट और इनपुट क्लियर करें
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResult').innerHTML = '';
             if (currentSelectedUserId === userId) {
@@ -2154,8 +2219,8 @@
                 ${remarkHtml}
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td></tr>' : ''}</tbody></table></div>
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
+                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td>' : ''}</tbody></table></div>
+                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
             </div>
@@ -2217,7 +2282,7 @@
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></thead><tbody>${rows || '<td><td colspan="5">कोई लेन-देन नहीं</td>'}</tbody>}</div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td>'}</tbody>}</div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2303,8 +2368,8 @@
         let html = '';
         if (errors.length) { html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">⚠️ ${errors.length} लाइन में गड़बड़ी:<br>${errors.join('<br>')}</div>`; }
         if (bulkParsedRows.length > 0) {
-            html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th><tr></thead><tbody>`;
-            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`; }
+            html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th></tr></thead><tbody>`;
+            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td>`; }
             html += `</tbody></table>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
@@ -2621,7 +2686,7 @@
                 if (data.ledger) Object.assign(ledger, data.ledger);
                 if (data.fines) Object.assign(fines, data.fines);
                 await saveDataToLocal();
-                if (supabaseClient) await syncToSupabase();
+                if (supabaseClient && navigator.onLine) await syncToSupabase();
                 refreshUI();
                 alert('✅ बैकअप रिस्टोर हो गया!');
             } catch(err) { alert('❌ गलत फाइल!'); }
@@ -2642,7 +2707,7 @@
                 if (data.ledger) ledger = data.ledger;
                 if (data.fines) fines = data.fines;
                 await saveDataToLocal();
-                if (supabaseClient) await syncToSupabase();
+                if (supabaseClient && navigator.onLine) await syncToSupabase();
                 document.getElementById('loginError').innerText = '✅ रिस्टोर हो गया! अब लॉगिन करें';
                 alert('✅ बैकअप रिस्टोर हो गया!\nअब login करें।');
             } catch(err) { alert('❌ गलत फाइल!'); }
@@ -2764,7 +2829,7 @@
         });
         
         const tbody = document.getElementById('activeLoansList');
-        if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं</td></tr>'; }
+        if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं<\/td><\/tr>'; }
         else {
             tbody.innerHTML = '';
             for (let [id, loan] of active) {
@@ -2796,7 +2861,7 @@
                                 <button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button>
                             </div>
                         </div>
-                    </td>
+                    <\/td>
                 </tr>`;
             }
         }
@@ -2885,7 +2950,9 @@
             indicator.classList.add('online');
             indicator.style.display = 'block';
             setTimeout(() => { indicator.style.display = 'none'; }, 3000);
-            if (currentUser && supabaseClient) { syncFromSupabase(); }
+            if (currentUser && supabaseClient) { 
+                syncFromSupabase().catch(err => console.error("Sync error:", err));
+            }
         } else {
             indicator.textContent = '📡 Offline Mode';
             indicator.classList.remove('online');
@@ -2907,7 +2974,7 @@
         window.updateOnlineStatus();
         loadData();
         setInterval(() => { if (currentUser) refreshUI(); }, 30000);
-        setInterval(() => { if (navigator.onLine && currentUser && supabaseClient) { syncFromSupabase(); } }, 5 * 60 * 1000);
+        setInterval(() => { if (navigator.onLine && currentUser && supabaseClient) { syncFromSupabase().catch(err => console.error(err)); } }, 5 * 60 * 1000);
     });
 </script>
 </body>
