@@ -838,7 +838,7 @@
                                 <tr><th>ग्राहक</th><th>बाकी</th><th>प्रति दिन</th><th style="text-align:center;">▼</th></tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
-                        </table>
+                         </>
                     </div>
                 </div>
             </div>
@@ -1044,6 +1044,7 @@
         } catch(err) { return false; }
     }
     
+    // ✅ FIXED: syncFromSupabase with merge instead of replace
     async function syncFromSupabase(forceRefresh = false) {
         if (!supabaseClient || !currentUser) {
             console.log("No supabase client or user, skipping sync");
@@ -1072,20 +1073,57 @@
                 queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
             ]);
             
-            if (usersData.error) console.error("Users fetch error:", usersData.error);
-            else if (usersData.data) { users = {}; usersData.data.forEach(u => { users[u.id] = u; }); }
+            // Merge instead of replace
+            let newUsers = {};
+            let newLoans = {};
+            let newLedger = {};
+            let newFines = {};
+            let newOfficers = {};
             
-            if (loansData.error) console.error("Loans fetch error:", loansData.error);
-            else if (loansData.data) { loans = {}; loansData.data.forEach(l => { loans[l.id] = l; }); }
+            if (usersData.error) {
+                console.error("Users fetch error:", usersData.error);
+            } else if (usersData.data && usersData.data.length > 0) {
+                usersData.data.forEach(u => { newUsers[u.id] = u; });
+            }
             
-            if (ledgerData.error) console.error("Ledger fetch error:", ledgerData.error);
-            else if (ledgerData.data) { ledger = {}; ledgerData.data.forEach(l => { ledger[l.id] = l; }); }
+            if (loansData.error) {
+                console.error("Loans fetch error:", loansData.error);
+            } else if (loansData.data && loansData.data.length > 0) {
+                loansData.data.forEach(l => { newLoans[l.id] = l; });
+                console.log(`✅ Loaded ${loansData.data.length} loans from Supabase`);
+                console.log("Monthly loans in Supabase:", loansData.data.filter(l => l.type === 'month').length);
+            }
             
-            if (finesData.error) console.error("Fines fetch error:", finesData.error);
-            else if (finesData.data) { fines = {}; finesData.data.forEach(f => { fines[f.id] = f; }); }
+            if (ledgerData.error) {
+                console.error("Ledger fetch error:", ledgerData.error);
+            } else if (ledgerData.data && ledgerData.data.length > 0) {
+                ledgerData.data.forEach(l => { newLedger[l.id] = l; });
+                console.log(`✅ Loaded ${ledgerData.data.length} ledger entries from Supabase`);
+            }
             
-            if (officersData.error) console.error("Officers fetch error:", officersData.error);
-            else if (officersData.data) { officers = {}; officersData.data.forEach(o => { officers[o.id] = o; }); }
+            if (finesData.error) {
+                console.error("Fines fetch error:", finesData.error);
+            } else if (finesData.data && finesData.data.length > 0) {
+                finesData.data.forEach(f => { newFines[f.id] = f; });
+            }
+            
+            if (officersData.error) {
+                console.error("Officers fetch error:", officersData.error);
+            } else if (officersData.data && officersData.data.length > 0) {
+                officersData.data.forEach(o => { newOfficers[o.id] = o; });
+            }
+            
+            // Merge with existing data
+            users = {...users, ...newUsers};
+            loans = {...loans, ...newLoans};
+            ledger = {...ledger, ...newLedger};
+            fines = {...fines, ...newFines};
+            officers = {...officers, ...newOfficers};
+            
+            console.log(`📊 After sync - Total loans: ${Object.keys(loans).length}, Monthly: ${Object.values(loans).filter(l => l.type === 'month').length}`);
+            
+            // ✅ CRITICAL: Recalculate monthly interest after loading data
+            checkMonthlyInterest();
             
             await saveDataToLocal();
             refreshUI();
@@ -1524,34 +1562,72 @@
         return total;
     }
     
+    // ✅ FIXED: calculateSimpleInterest
     function calculateSimpleInterest(loan) {
-        const startDate = new Date(loan.start_date.split('/').reverse().join('-'));
+        if (!loan.start_date) {
+            return { total_interest: 0, total_amount: loan.principal };
+        }
+        
+        const startParts = loan.start_date.split('/');
+        const startDate = new Date(parseInt(startParts[2]), parseInt(startParts[1]) - 1, parseInt(startParts[0]));
         const today = new Date();
+        
         let monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12;
         monthsDiff += today.getMonth() - startDate.getMonth();
-        if (today.getDate() < startDate.getDate()) monthsDiff--;
+        
+        if (today.getDate() < startDate.getDate()) {
+            monthsDiff--;
+        }
+        
         const totalMonths = Math.max(0, monthsDiff);
         const totalInterest = loan.principal * (loan.interest_rate / 100) * totalMonths;
+        
         return {
             total_interest: Math.round(totalInterest * 100) / 100,
-            total_amount: loan.principal + Math.round(totalInterest * 100) / 100 + (loan.total_fine || 0) - (loan.total_discount || 0)
+            total_amount: loan.principal + Math.round(totalInterest * 100) / 100
         };
     }
     
+    // ✅ FIXED: checkMonthlyInterest
     function checkMonthlyInterest() {
+        console.log("🔄 Checking monthly interest...");
+        let updatedCount = 0;
+        
         for (let loanId of Object.keys(loans)) {
             let loan = loans[loanId];
             if (loan.type === 'month' && loan.status === 'active') {
+                if (!loan.total_interest) loan.total_interest = 0;
+                if (!loan.total_fine) loan.total_fine = 0;
+                if (!loan.total_discount) loan.total_discount = 0;
+                if (!loan.last_month_check) loan.last_month_check = loan.start_date;
+                
                 const result = calculateSimpleInterest(loan);
+                const oldRemaining = loan.remaining_amount;
+                
                 loan.total_interest = result.total_interest;
                 loan.total_amount = result.total_amount;
+                
                 const totalNormalPayments = getTotalNormalPayments(loanId);
                 loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
-                if (loan.remaining_amount <= 0) loan.status = 'completed';
+                
+                if (loan.remaining_amount !== oldRemaining) {
+                    updatedCount++;
+                    console.log(`📈 Updated loan ${loanId}: ${loan.user_name} - Remaining: ₹${loan.remaining_amount}`);
+                }
+                
+                if (loan.remaining_amount <= 0) {
+                    loan.status = 'completed';
+                    loan.closing_date = getTodayDate();
+                    console.log(`✅ Loan completed: ${loan.user_name}`);
+                }
                 loans[loanId] = loan;
             }
         }
-        saveData();
+        
+        if (updatedCount > 0) {
+            console.log(`✅ Updated ${updatedCount} monthly loans`);
+            saveData();
+        }
     }
     
     function createNewLoanFromPrincipal(oldLoan, newPrincipal, paymentDate, principalPaid) {
@@ -1631,8 +1707,8 @@
                             <button class="edit-officer small" onclick="editOfficer('${id}')">✏️</button>
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
-                        <\/td>
-                      </tr>`;
+                        </td>
+                       </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -1910,7 +1986,6 @@
                 }
             }
             
-            // Delete ledger entries
             for (let [ledgerId, entry] of Object.entries(ledger)) {
                 if (entry.user_id === userId) {
                     delete ledger[ledgerId];
@@ -1920,7 +1995,6 @@
                 }
             }
             
-            // Delete fines
             for (let [fineId, fine] of Object.entries(fines)) {
                 if (fine.user_id === userId) {
                     delete fines[fineId];
@@ -1930,7 +2004,6 @@
                 }
             }
             
-            // Delete loans
             for (let loanId of customerLoans) {
                 delete loans[loanId];
                 if (supabaseClient) {
@@ -1938,7 +2011,6 @@
                 }
             }
             
-            // Delete user
             delete users[userId];
             if (supabaseClient) {
                 await deleteFromSupabase('users', userId);
@@ -2074,7 +2146,7 @@
                 <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
                 <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
                 <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button></td>
-            </tr>`;
+             </tr>`;
         }
         const modalHtml = `<div>
             <div style="background:#f5f5f5; padding:10px; margin-bottom:12px; border-radius:6px;">
@@ -2282,7 +2354,7 @@
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td>'}</tbody>}</div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं</td>'}</tbody>}</div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2369,7 +2441,7 @@
         if (errors.length) { html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">⚠️ ${errors.length} लाइन में गड़बड़ी:<br>${errors.join('<br>')}</div>`; }
         if (bulkParsedRows.length > 0) {
             html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th></tr></thead><tbody>`;
-            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td>`; }
+            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`; }
             html += `</tbody></table>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
@@ -2933,7 +3005,11 @@
                 if (currentUser.expiry) updateExpiryBadge(currentUser.expiry);
                 else updateExpiryBadge(null);
                 setTimeout(() => { checkAndShowReminder(); }, 5000);
-                if (supabaseClient) await syncFromSupabase();
+                if (supabaseClient) {
+                    await syncFromSupabase();
+                    checkMonthlyInterest();
+                    refreshUI();
+                }
                 return;
             }
         } catch(error) { console.error('loadData error:', error); }
