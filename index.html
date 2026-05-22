@@ -710,6 +710,20 @@
         .sync-status.synced { background: #27ae60; }
         .sync-status.pending { background: #f39c12; }
         .sync-status.error { background: #e74c3c; }
+        
+        /* Performance优化 - smooth clicks */
+        button, .tab-btn, .dropdown-icon-btn {
+            transition: all 0.05s ease;
+            cursor: pointer;
+        }
+        button:active, .tab-btn:active {
+            transform: scale(0.97);
+            opacity: 0.8;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -874,11 +888,11 @@
 <div id="newCustomerModal" class="modal">
     <div class="modal-content" style="max-width:400px;">
         <span class="close" onclick="closeNewCustomerModal()">&times;</span>
-        <h3>👤 नया ग्राहक</h3>
+        <h3 id="newCustomerModalTitle">👤 नया ग्राहक</h3>
         <div class="form-group"><label>नाम *</label><input type="text" id="newCustomerName" placeholder="ग्राहक का नाम"></div>
         <div class="form-group"><label>मोबाइल *</label><input type="text" id="newCustomerMobile" placeholder="मोबाइल नंबर"></div>
         <div class="form-group"><label>पता *</label><input type="text" id="newCustomerAddress" placeholder="पता"></div>
-        <button onclick="createCustomerFromModal()" style="width:100%; background:#27ae60; padding:10px;">✅ ग्राहक बनाएं</button>
+        <button id="newCustomerSubmitBtn" onclick="createCustomerFromModal()" style="width:100%; background:#27ae60; padding:10px;">✅ ग्राहक बनाएं</button>
     </div>
 </div>
 
@@ -979,6 +993,9 @@
     let reminderVisible = false;
     let pendingReminderTime = null;
     let bulkParsedRows = [];
+    let editingCustomerId = null;
+    let DEBUG_MODE = false;
+    let saveTimeout = null;
     
     const GITHUB_USERS_URL = "users.json";
     const DB_NAME = 'HLBFinanceDB';
@@ -1010,12 +1027,11 @@
     
     function initSupabase() {
         if (typeof supabase === 'undefined') {
-            console.log("⏳ Waiting for Supabase library...");
             setTimeout(initSupabase, 500);
             return;
         }
         supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("✅ Supabase initialized!");
+        if (DEBUG_MODE) console.log("✅ Supabase initialized!");
     }
     
     async function saveToSupabase(table, data) {
@@ -1027,10 +1043,9 @@
                 updateSyncStatus('error', '❌ सेव नहीं');
                 return false;
             }
-            console.log(`✅ Saved to ${table}:`, data.id);
+            if (DEBUG_MODE) console.log(`✅ Saved to ${table}:`, data.id);
             return true;
         } catch(err) { 
-            console.error(`Exception saving to ${table}:`, err);
             return false; 
         }
     }
@@ -1044,10 +1059,17 @@
         } catch(err) { return false; }
     }
     
-    // ✅ FIXED: syncFromSupabase with merge instead of replace
+    // ✅ Debounced save function
+    function debouncedSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveData();
+            saveTimeout = null;
+        }, 500);
+    }
+    
     async function syncFromSupabase(forceRefresh = false) {
         if (!supabaseClient || !currentUser) {
-            console.log("No supabase client or user, skipping sync");
             return false;
         }
         
@@ -1073,7 +1095,6 @@
                 queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
             ]);
             
-            // Merge instead of replace
             let newUsers = {};
             let newLoans = {};
             let newLedger = {};
@@ -1090,15 +1111,14 @@
                 console.error("Loans fetch error:", loansData.error);
             } else if (loansData.data && loansData.data.length > 0) {
                 loansData.data.forEach(l => { newLoans[l.id] = l; });
-                console.log(`✅ Loaded ${loansData.data.length} loans from Supabase`);
-                console.log("Monthly loans in Supabase:", loansData.data.filter(l => l.type === 'month').length);
+                if (DEBUG_MODE) console.log(`✅ Loaded ${loansData.data.length} loans from Supabase`);
             }
             
             if (ledgerData.error) {
                 console.error("Ledger fetch error:", ledgerData.error);
             } else if (ledgerData.data && ledgerData.data.length > 0) {
                 ledgerData.data.forEach(l => { newLedger[l.id] = l; });
-                console.log(`✅ Loaded ${ledgerData.data.length} ledger entries from Supabase`);
+                if (DEBUG_MODE) console.log(`✅ Loaded ${ledgerData.data.length} ledger entries from Supabase`);
             }
             
             if (finesData.error) {
@@ -1120,9 +1140,7 @@
             fines = {...fines, ...newFines};
             officers = {...officers, ...newOfficers};
             
-            console.log(`📊 After sync - Total loans: ${Object.keys(loans).length}, Monthly: ${Object.values(loans).filter(l => l.type === 'month').length}`);
-            
-            // ✅ CRITICAL: Recalculate monthly interest after loading data
+            // Recalculate monthly interest after loading data
             checkMonthlyInterest();
             
             await saveDataToLocal();
@@ -1139,7 +1157,6 @@
     async function syncToSupabase() {
         if (!supabaseClient || !currentUser) return;
         if (!navigator.onLine) {
-            console.log("Offline, skipping sync");
             return;
         }
         
@@ -1562,7 +1579,7 @@
         return total;
     }
     
-    // ✅ FIXED: calculateSimpleInterest
+    // ✅ CORRECTED: महीना पूरा होने पर ही ब्याज लगेगा
     function calculateSimpleInterest(loan) {
         if (!loan.start_date) {
             return { total_interest: 0, total_amount: loan.principal };
@@ -1575,6 +1592,7 @@
         let monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12;
         monthsDiff += today.getMonth() - startDate.getMonth();
         
+        // ✅ महीना पूरा हुआ तभी count करें
         if (today.getDate() < startDate.getDate()) {
             monthsDiff--;
         }
@@ -1588,10 +1606,10 @@
         };
     }
     
-    // ✅ FIXED: checkMonthlyInterest
+    // ✅ FIXED: checkMonthlyInterest with proper month completion
     function checkMonthlyInterest() {
-        console.log("🔄 Checking monthly interest...");
         let updatedCount = 0;
+        let today = new Date();
         
         for (let loanId of Object.keys(loans)) {
             let loan = loans[loanId];
@@ -1612,21 +1630,18 @@
                 
                 if (loan.remaining_amount !== oldRemaining) {
                     updatedCount++;
-                    console.log(`📈 Updated loan ${loanId}: ${loan.user_name} - Remaining: ₹${loan.remaining_amount}`);
                 }
                 
                 if (loan.remaining_amount <= 0) {
                     loan.status = 'completed';
                     loan.closing_date = getTodayDate();
-                    console.log(`✅ Loan completed: ${loan.user_name}`);
                 }
                 loans[loanId] = loan;
             }
         }
         
         if (updatedCount > 0) {
-            console.log(`✅ Updated ${updatedCount} monthly loans`);
-            saveData();
+            debouncedSave();
         }
     }
     
@@ -1815,22 +1830,56 @@
         }
     }
     
+    // ✅ FIXED: addDirectCollection with duplicate prevention
     function addDirectCollection() {
-        const name = document.getElementById('collectionNameInput').value;
+        const name = document.getElementById('collectionNameInput').value.trim();
         const loanId = document.getElementById('collectionLoanSelect').value;
         const amount = parseFloat(document.getElementById('collectionAmount').value);
         const dateInput = document.getElementById('collectionDate').value;
-        if (!name || !amount || amount <= 0 || !dateInput) { alert('नाम, राशि और तारीख डालें!'); return; }
+        
+        if (!name || !amount || amount <= 0 || !dateInput) { 
+            alert('नाम, राशि और तारीख डालें!'); 
+            return; 
+        }
+        
         let parts = dateInput.split('-');
         let displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        
         let userId = null;
         for (let [id, u] of Object.entries(users)) {
-            if (u.name === name && (currentUser.role === 'admin' || u.officer_id === currentUser.officerId)) { userId = id; break; }
+            if (u.name === name && (currentUser.role === 'admin' || u.officer_id === currentUser.officerId)) { 
+                userId = id; 
+                break; 
+            }
         }
+        
         if (!userId) {
+            let createNew = confirm(`"${name}" नाम का ग्राहक नहीं मिला।\n\nक्या आप नया ग्राहक बनाना चाहते हैं?`);
+            if (!createNew) {
+                alert("कलेक्शन रद्द कर दिया गया।");
+                return;
+            }
+            
+            let mobile = prompt("नए ग्राहक के लिए मोबाइल नंबर डालें:", "");
+            if (!mobile) {
+                alert("मोबाइल नंबर जरूरी है!");
+                return;
+            }
+            
+            let address = prompt("नए ग्राहक का पता डालें:", "");
+            
             userId = Date.now().toString();
-            users[userId] = { id: userId, name, mobile: '', address: '', officer_id: currentUser.officerId || currentUser.id, created_date: getTodayDate() };
+            users[userId] = { 
+                id: userId, 
+                name, 
+                mobile, 
+                address, 
+                officer_id: currentUser.officerId || currentUser.id, 
+                created_date: getTodayDate() 
+            };
+            alert(`✅ नया ग्राहक "${name}" बन गया!`);
         }
+        
         const ledgerId = Date.now().toString();
         if (loanId !== 'new' && loans[loanId]) {
             const loan = loans[loanId];
@@ -1843,7 +1892,7 @@
         } else {
             ledger[ledgerId] = { id: ledgerId, loan_id: null, user_id: userId, user_name: name, officer_id: currentUser.officerId || currentUser.id, date: displayDate, amount_paid: amount, old_balance: null, new_balance: null, type: 'direct', discount: 0 };
         }
-        saveData();
+        debouncedSave();
         refreshUI();
         document.getElementById('collectionNameInput').value = '';
         document.getElementById('collectionLoanSelect').innerHTML = '<option value="">पहले ग्राहक चुनें</option>';
@@ -1894,6 +1943,36 @@
         customerLedger.sort((a,b) => b[0] - a[0]);
         const div = document.getElementById('ledgerResult');
         if (!customerLedger.length) { div.innerHTML = '<p>कोई लेन-देन नहीं</p>'; return; }
+        
+        let displayCount = Math.min(customerLedger.length, 50);
+        let hasMore = customerLedger.length > 50;
+        
+        div.innerHTML = '';
+        for (let i = 0; i < displayCount; i++) {
+            let [id, e] = customerLedger[i];
+            let displayText = '';
+            if (e.type === 'payment') { displayText = `जमा: ₹${e.amount_paid}`; if (e.discount) displayText += ` (${e.discount} छूट)`; }
+            else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
+            else if (e.type === 'principal_closure') { displayText = `🔒 ${e.message || 'मूलधन जमा - लोन बंद'}`; }
+            else if (e.type === 'new_loan_from_principal') { displayText = `🆕 ${e.message || 'नया लोन बना'}`; }
+            else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
+            let customerDisplay = e.user_name;
+            if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
+            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${e.date} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
+        }
+        if (hasMore) {
+            div.innerHTML += `<div class="ledger-item" style="text-align:center; background:#e8f5e9;">
+                <button class="small" onclick="showAllLedger('${userId}')">
+                    + ${customerLedger.length - 50} और दिखाएं
+                </button>
+            </div>`;
+        }
+    }
+    
+    function showAllLedger(userId) {
+        let customerLedger = Object.entries(ledger).filter(([id,e]) => e.user_id === userId);
+        customerLedger.sort((a,b) => b[0] - a[0]);
+        const div = document.getElementById('ledgerResult');
         div.innerHTML = '';
         for (let [id, e] of customerLedger) {
             let displayText = '';
@@ -1916,8 +1995,10 @@
             if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
             let matches = Object.entries(users).filter(([id,u]) => 
                 (currentUser.role === 'admin' || u.officer_id === currentUser.officerId) && (u.name.toLowerCase().includes(q) || u.mobile.includes(q)));
-            if (matches.length) { sug.style.display = 'block'; sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join(''); }
-            else sug.style.display = 'none';
+            if (matches.length) {
+                sug.style.display = 'block';
+                sug.innerHTML = matches.map(([id,u]) => `<div class="suggestion-item" onclick="selectCustomer('${id}','${u.name}')">${u.name} - ${u.mobile} ${u.address ? '- ' + u.address : ''}</div>`).join('');
+            } else sug.style.display = 'none';
         });
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
@@ -1930,7 +2011,17 @@
         if (showOnlyCompletedLoans) { customerLoans = customerLoans.filter(([id,l]) => l.status === 'completed'); }
         else { customerLoans = customerLoans.filter(([id,l]) => l.status === 'active'); }
         const customer = users[userId];
-        let html = `<div style="background:#f0f2f5; padding:8px; border-radius:6px;"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;"><div class="search-header-buttons"><button id="toggleCompletedBtn" class="filter-btn small" onclick="toggleCompletedLoans()" style="${showOnlyCompletedLoans ? 'background:#27ae60;' : 'background:#8e44ad;'}">✅ ${showOnlyCompletedLoans ? 'एक्टिव लोन' : 'पूरे हुए लोन'}</button><button class="small info" onclick="renameCustomer('${userId}')">✏️ नाम बदलें</button><button class="danger small" onclick="deleteCustomer('${userId}','${userName}')">${t('deleteCustomer')}</button></div></div></div>`;
+        let html = `<div style="background:#f0f2f5; padding:8px; border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+                <div class="search-header-buttons">
+                    <button id="toggleCompletedBtn" class="filter-btn small" onclick="toggleCompletedLoans()" style="${showOnlyCompletedLoans ? 'background:#27ae60;' : 'background:#8e44ad;'}">
+                        ✅ ${showOnlyCompletedLoans ? 'एक्टिव लोन' : 'पूरे हुए लोन'}
+                    </button>
+                    <button class="small info" onclick="editCustomer('${userId}')">✏️ ग्राहक एडिट</button>
+                    <button class="danger small" onclick="deleteCustomer('${userId}','${userName}')">${t('deleteCustomer')}</button>
+                </div>
+            </div>
+        </div>`;
         if (!customerLoans.length) { html += '<p style="padding:8px;">कोई लोन नहीं</p>'; }
         else {
             for (let [id, loan] of customerLoans) {
@@ -1956,21 +2047,112 @@
         }
     }
     
-    function renameCustomer(userId) {
+    // ✅ FIXED: Edit Customer with Modal
+    function editCustomer(userId) {
         const user = users[userId];
         if (!user) return;
-        const newName = prompt('नया नाम डालें:', user.name);
-        if (!newName || newName.trim() === '' || newName.trim() === user.name) return;
+        
+        document.getElementById('newCustomerName').value = user.name;
+        document.getElementById('newCustomerMobile').value = user.mobile || '';
+        document.getElementById('newCustomerAddress').value = user.address || '';
+        
+        editingCustomerId = userId;
+        
+        document.getElementById('newCustomerModalTitle').innerHTML = '✏️ ग्राहक संपादित करें';
+        const btn = document.getElementById('newCustomerSubmitBtn');
+        btn.innerHTML = '✅ अपडेट करें';
+        btn.onclick = updateCustomerFromModal;
+        
+        document.getElementById('newCustomerModal').style.display = 'flex';
+    }
+    
+    // ✅ UPDATE CUSTOMER FUNCTION
+    function updateCustomerFromModal() {
+        const userId = editingCustomerId;
+        if (!userId) {
+            alert("Error: Customer ID not found!");
+            closeNewCustomerModal();
+            return;
+        }
+        
+        const user = users[userId];
+        if (!user) {
+            alert("Customer not found!");
+            closeNewCustomerModal();
+            return;
+        }
+        
+        const newName = document.getElementById('newCustomerName').value.trim();
+        const newMobile = document.getElementById('newCustomerMobile').value.trim();
+        const newAddress = document.getElementById('newCustomerAddress').value.trim();
+        
+        if (!newName || !newMobile || !newAddress) {
+            alert('नाम, मोबाइल और पता सभी भरें!');
+            return;
+        }
+        
+        // Check if mobile number already exists for another customer
+        for (let [id, u] of Object.entries(users)) {
+            if (id !== userId && u.mobile === newMobile) {
+                alert(`⚠️ यह मोबाइल नंबर "${newMobile}" पहले से ग्राहक "${u.name}" के पास है!\n\nदूसरा मोबाइल नंबर डालें।`);
+                return;
+            }
+        }
+        
         const oldName = user.name;
-        const trimmedName = newName.trim();
-        users[userId].name = trimmedName;
-        for (let [lid, loan] of Object.entries(loans)) if (loan.user_id === userId) loans[lid].user_name = trimmedName;
-        for (let [lid, entry] of Object.entries(ledger)) if (entry.user_id === userId) ledger[lid].user_name = trimmedName;
-        for (let [fid, fine] of Object.entries(fines)) if (fine.user_id === userId) fines[fid].user_name = trimmedName;
-        saveData();
+        const oldMobile = user.mobile;
+        const oldAddress = user.address;
+        
+        // Update user
+        user.name = newName;
+        user.mobile = newMobile;
+        user.address = newAddress;
+        users[userId] = user;
+        
+        // Update all loans for this user
+        for (let [loanId, loan] of Object.entries(loans)) {
+            if (loan.user_id === userId) {
+                loan.user_name = newName;
+                loans[loanId] = loan;
+            }
+        }
+        
+        // Update all ledger entries for this user
+        for (let [ledgerId, entry] of Object.entries(ledger)) {
+            if (entry.user_id === userId) {
+                entry.user_name = newName;
+                ledger[ledgerId] = entry;
+            }
+        }
+        
+        // Update all fines for this user
+        for (let [fineId, fine] of Object.entries(fines)) {
+            if (fine.user_id === userId) {
+                fine.user_name = newName;
+                fines[fineId] = fine;
+            }
+        }
+        
+        debouncedSave();
         refreshUI();
-        alert(`✅ नाम बदल गया!\n"${oldName}" → "${trimmedName}"\nसभी जगह अपडेट हो गया।`);
-        selectCustomer(userId, trimmedName);
+        closeNewCustomerModal();
+        
+        let changes = [];
+        if (oldName !== newName) changes.push(`नाम: "${oldName}" → "${newName}"`);
+        if (oldMobile !== newMobile) changes.push(`मोबाइल: "${oldMobile}" → "${newMobile}"`);
+        if (oldAddress !== newAddress) changes.push(`पता: "${oldAddress}" → "${newAddress}"`);
+        
+        alert(`✅ ग्राहक अपडेट हो गया!\n\n${changes.join('\n')}`);
+        
+        if (currentSelectedUserId === userId) {
+            selectCustomer(userId, newName);
+        }
+        
+        editingCustomerId = null;
+    }
+    
+    function renameCustomer(userId) {
+        editCustomer(userId);
     }
     
     async function deleteCustomer(userId, userName) {
@@ -2075,7 +2257,7 @@
                 const newLoanId = createNewLoanFromPrincipal(loan, newPrincipal, paymentDate, amount);
                 if (newLoanId) alert(`✅ मूलधन जमा सफल!\nपुराना लोन #${loan.id} बंद किया गया (तारीख: ${paymentDate})\n💰 जमा: ₹${amount.toLocaleString('en-IN')}\n🆕 नया लोन बना: ₹${newPrincipal.toLocaleString('en-IN')} मूलधन (तारीख: ${paymentDate})\n💡 नए लोन के विवरण में नीचे "Remark" देखें।`);
             } else { alert(`✅ मूलधन जमा सफल!\nपुराना लोन #${loan.id} पूरी तरह बंद किया गया (तारीख: ${paymentDate})\n💰 जमा: ₹${amount.toLocaleString('en-IN')}\n🎯 लोन पूर्ण हुआ!`); }
-            saveData(); refreshUI(); closePaymentModal(); return;
+            debouncedSave(); refreshUI(); closePaymentModal(); return;
         }
         
         if (discount > 0) {
@@ -2094,7 +2276,7 @@
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: paymentDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: discount };
         if (discount > 0) alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
-        saveData(); refreshUI(); closePaymentModal();
+        debouncedSave(); refreshUI(); closePaymentModal();
         alert(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${paymentDate})\nबचा: ${newRemaining > 0 ? '₹' + newRemaining.toLocaleString('en-IN') : 'लोन पूरा!'}`);
     }
     
@@ -2123,7 +2305,7 @@
         loans[loanId] = loan;
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: getTodayDate(), amount_paid: 0, old_balance: loan.remaining_amount + discount, new_balance: loan.remaining_amount, type: 'discount', discount: discount };
-        saveData(); refreshUI(); closeDiscountModal();
+        debouncedSave(); refreshUI(); closeDiscountModal();
         alert(`🎁 ₹${discount} का डिस्काउंट दिया गया!`);
     }
     
@@ -2201,7 +2383,7 @@
             else { loan.status = 'active'; }
             loans[entry.loan_id] = loan;
         }
-        saveData();
+        debouncedSave();
         refreshUI();
         alert(`✅ पेमेंट अपडेट!\n📅 ${oldDate} → ${newDate}\n💰 ₹${oldAmount.toLocaleString('en-IN')} → ₹${newAmount.toLocaleString('en-IN')}`);
     }
@@ -2292,7 +2474,7 @@
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
                     <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td></tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं</td>' : ''}</tbody></table></div>
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
+                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></table></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td>${t.date}</td><td>${t.type}</td><td class="text-right">${t.amount.toLocaleString('en-IN')}</td>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-</td>' : ''}</tbody></table></div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
             </div>
@@ -2328,7 +2510,7 @@
         });
         let rows = '';
         for (let i = 0; i < all.length; i++) {
-            rows += `<tr style="text-align:center"><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></tr>`;
+            rows += `<tr style="text-align:center"><td>${i+1}</td><td>${all[i].date}</td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}</td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}</td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}</td></table>`;
         }
         let remarkHtml = '';
         if (loan.remark) {
@@ -2401,17 +2583,60 @@
     
     function parseAmount(str) { return parseFloat(str.replace(/[₹,\s]/g, '')) || 0; }
     
+    // ✅ Universal Date Parser - सभी formats काम करेंगे
     function parseDateTime(str) {
         if (!str) return getTodayDate();
         str = str.trim();
+        
+        // Remove time portion
+        str = str.replace(/\s*(\d{1,2}):(\d{2})\s*(am|pm)?/i, '');
+        str = str.replace(/\s*(am|pm)/i, '');
+        str = str.trim();
+        
         let dd, mm, yyyy;
+        
+        // Try DD/MM/YYYY or DD-MM-YYYY
         let m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (m) { dd = parseInt(m[1]); mm = parseInt(m[2]); yyyy = parseInt(m[3]); }
-        if (!dd) {
-            m = str.match(/^(\d{1,2})[\/\-\s](\d{4})/);
-            if (m) { dd = parseInt(m[1]); yyyy = parseInt(m[2]); mm = getCurrentMonth(); }
+        if (m) {
+            dd = parseInt(m[1]);
+            mm = parseInt(m[2]);
+            yyyy = parseInt(m[3]);
+            // Validate - if dd > 12 and mm <= 12, swap
+            if (dd > 12 && mm <= 12) {
+                let temp = dd;
+                dd = mm;
+                mm = temp;
+            }
+            return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
         }
-        if (dd && mm && yyyy) return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
+        
+        // Try DD Mon YYYY
+        let monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        let lowerStr = str.toLowerCase();
+        for (let i = 0; i < monthNames.length; i++) {
+            if (lowerStr.includes(monthNames[i])) {
+                mm = i + 1;
+                let numMatch = str.match(/\d+/g);
+                if (numMatch && numMatch.length >= 2) {
+                    dd = parseInt(numMatch[0]);
+                    yyyy = parseInt(numMatch[1]);
+                    if (yyyy < 100) yyyy = yyyy < 30 ? 2000 + yyyy : 1900 + yyyy;
+                    return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
+                }
+                break;
+            }
+        }
+        
+        // Try YYYY-MM-DD
+        m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (m) {
+            yyyy = parseInt(m[1]);
+            mm = parseInt(m[2]);
+            dd = parseInt(m[3]);
+            return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
+        }
+        
+        // Fallback to today
         return getTodayDate();
     }
     
@@ -2424,7 +2649,7 @@
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
-            const cols = line.split('\t');
+            const cols = line.split(/\t|,|\s{2,}/);
             if (cols.length < 2) { errors.push(`Line ${i+1}: दो column नहीं मिले`); continue; }
             const amount = parseAmount(cols[0]);
             const dateStr = parseDateTime(cols[1]);
@@ -2469,7 +2694,7 @@
             successCount++;
         }
         loans[loanId] = loan;
-        saveData(); refreshUI(); closeBulkPaymentModal();
+        debouncedSave(); refreshUI(); closeBulkPaymentModal();
         alert(`✅ ${successCount} payments जमा हो गई!\n${skipCount > 0 ? `⚠️ ${skipCount} skip हुई` : ''}\nअब बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}`);
     }
     
@@ -2509,7 +2734,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        saveData(); refreshUI(); closeEditPaymentModal();
+        debouncedSave(); refreshUI(); closeEditPaymentModal();
         alert('✅ एडिट हो गया!');
     }
     
@@ -2526,7 +2751,7 @@
                 loans[entry.loan_id] = loan;
             }
             delete ledger[ledgerId];
-            saveData(); refreshUI(); closeEditPaymentModal();
+            debouncedSave(); refreshUI(); closeEditPaymentModal();
             alert('🗑️ पेमेंट डिलीट हो गया!');
         }
     }
@@ -2555,7 +2780,7 @@
         loans[loanId] = loan;
         const fineId = Date.now().toString();
         fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
-        saveData(); refreshUI(); closeOverdueModal();
+        debouncedSave(); refreshUI(); closeOverdueModal();
         alert('✅ फाइन ₹' + extra + ' ग्राहक के खाते में जुड़ गया!');
     }
     
@@ -2584,7 +2809,7 @@
                 if (loan.remaining_amount <= 0) loan.status = 'completed';
                 else loan.status = 'active';
             }
-            saveData();
+            debouncedSave();
             refreshUI();
             alert('✅ लोन अपडेट हो गया!');
         }
@@ -2599,7 +2824,7 @@
             for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.loan_id === loanId) delete ledger[ledgerId];
             for (let [fineId, fine] of Object.entries(fines)) if (fine.loan_id === loanId) delete fines[fineId];
             delete loans[loanId];
-            saveData();
+            debouncedSave();
             refreshUI();
             alert('✅ लोन डिलीट हो गया!');
         }
@@ -2632,24 +2857,59 @@
         document.getElementById('newCustomerName').value = '';
         document.getElementById('newCustomerMobile').value = '';
         document.getElementById('newCustomerAddress').value = '';
+        editingCustomerId = null;
+        document.getElementById('newCustomerModalTitle').innerHTML = '👤 नया ग्राहक';
+        const btn = document.getElementById('newCustomerSubmitBtn');
+        btn.innerHTML = '✅ ग्राहक बनाएं';
+        btn.onclick = createCustomerFromModal;
         document.getElementById('newCustomerModal').style.display = 'flex';
     }
     
     function closeNewCustomerModal() {
         document.getElementById('newCustomerModal').style.display = 'none';
+        document.getElementById('newCustomerName').value = '';
+        document.getElementById('newCustomerMobile').value = '';
+        document.getElementById('newCustomerAddress').value = '';
+        document.getElementById('newCustomerModalTitle').innerHTML = '👤 नया ग्राहक';
+        const btn = document.getElementById('newCustomerSubmitBtn');
+        btn.innerHTML = '✅ ग्राहक बनाएं';
+        btn.onclick = createCustomerFromModal;
+        editingCustomerId = null;
     }
     
+    // ✅ FIXED: createCustomerFromModal with duplicate prevention
     function createCustomerFromModal() {
-        const name = document.getElementById('newCustomerName').value;
-        const mobile = document.getElementById('newCustomerMobile').value;
-        const address = document.getElementById('newCustomerAddress').value;
-        if (!name || !mobile || !address) { alert('नाम, मोबाइल, पता भरें!'); return; }
+        const name = document.getElementById('newCustomerName').value.trim();
+        const mobile = document.getElementById('newCustomerMobile').value.trim();
+        const address = document.getElementById('newCustomerAddress').value.trim();
+        
+        if (!name || !mobile || !address) {
+            alert('नाम, मोबाइल, पता भरें!');
+            return;
+        }
+        
+        // Check if customer with same mobile already exists
+        for (let [id, u] of Object.entries(users)) {
+            if (u.mobile === mobile) {
+                alert(`⚠️ यह मोबाइल नंबर "${mobile}" पहले से ग्राहक "${u.name}" के पास है!\n\nदूसरा मोबाइल नंबर डालें।`);
+                return;
+            }
+        }
+        
         const id = Date.now().toString();
-        users[id] = { id, name, mobile, address, officer_id: currentUser.officerId || currentUser.id, created_date: getTodayDate() };
-        saveData();
+        users[id] = {
+            id,
+            name,
+            mobile,
+            address,
+            officer_id: currentUser.officerId || currentUser.id,
+            created_date: getTodayDate()
+        };
+        
+        debouncedSave();
         refreshUI();
         closeNewCustomerModal();
-        alert('✅ ग्राहक बन गया!');
+        alert(`✅ नया ग्राहक "${name}" बन गया!`);
     }
     
     function openNewLoanModal() {
@@ -2703,7 +2963,7 @@
                 total_fine: 0, total_discount: 0
             };
         }
-        saveData();
+        debouncedSave();
         refreshUI();
         closeNewLoanModal();
         alert('✅ लोन बन गया!');
@@ -2880,75 +3140,81 @@
         }
     }
     
+    // ✅ Optimized refreshUI with requestAnimationFrame
     function refreshUI() {
-        checkMonthlyInterest();
-        updateTotalLoanBox();
-        updateStats();
-        if (currentUser && currentUser.role === 'admin') refreshOfficerList();
-        const select = document.getElementById('loanCustomerSelect');
-        if (select && currentUser) {
-            select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
-            let customers = Object.entries(users);
-            if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-            for (let [id, u] of customers) { select.innerHTML += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`; }
-        }
-        let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
-        if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
-        active.sort((a, b) => {
-            if (a[1].type === 'month' && b[1].type !== 'month') return -1;
-            if (a[1].type !== 'month' && b[1].type === 'month') return 1;
-            return 0;
-        });
-        
-        const tbody = document.getElementById('activeLoansList');
-        if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं<\/td><\/tr>'; }
-        else {
-            tbody.innerHTML = '';
-            for (let [id, loan] of active) {
-                let perDayDisplay = '-';
-                if (loan.type === 'day' && loan.per_day) perDayDisplay = '₹' + loan.per_day.toFixed(2);
-                let customerDisplay = loan.user_name;
-                let customerAddress = '';
-                if (users[loan.user_id] && users[loan.user_id].address) {
-                    customerAddress = users[loan.user_id].address;
-                    customerDisplay = loan.user_name;
-                }
-                tbody.innerHTML += `<tr>
-                    <td class="customer-cell"><div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div><div class="customer-principal"><strong style="color:#0d47a1;">मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</strong></div></td>
-                    <td class="remaining-amount"><strong style="color:#0d47a1;">₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></td>
-                    <td class="per-day-amount">${perDayDisplay}</td>
-                    <td style="text-align:center;">
-                        <div class="action-dropdown">
-                            <button class="dropdown-icon-btn" onclick="this.parentElement.classList.toggle('active')">▼</button>
-                            <div class="action-dropdown-content">
-                                <button class="info" onclick="showLoanDetails('${id}'); event.stopPropagation();">📋 ${t('details')}</button>
-                                <button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button>
-                                ${currentUser && currentUser.role === 'officer' ? `<button style="background:#27ae60;" onclick="openPaymentModal('${id}'); event.stopPropagation();">💰 ${t('payment')}</button>` : ''}
-                                ${currentUser && currentUser.role === 'officer' ? `<button style="background:#16a085;" onclick="openBulkPaymentModal('${id}'); event.stopPropagation();">📋 Bulk</button>` : ''}
-                                <button class="payedit" onclick="openPaymentEditList('${id}'); event.stopPropagation();">📝 Pay Edit</button>
-                                ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button>` : ''}
-                                ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button>` : ''}
-                                <button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>
-                                <button style="background:#8e44ad;" onclick="openReceiptModal('${id}'); event.stopPropagation();">🧾 रसीद</button>
-                                <button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button>
+        requestAnimationFrame(() => {
+            checkMonthlyInterest();
+            updateTotalLoanBox();
+            updateStats();
+            if (currentUser && currentUser.role === 'admin') refreshOfficerList();
+            
+            const select = document.getElementById('loanCustomerSelect');
+            if (select && currentUser) {
+                select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
+                let customers = Object.entries(users);
+                if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
+                for (let [id, u] of customers) { select.innerHTML += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`; }
+            }
+            
+            let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
+            if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
+            active.sort((a, b) => {
+                if (a[1].type === 'month' && b[1].type !== 'month') return -1;
+                if (a[1].type !== 'month' && b[1].type === 'month') return 1;
+                return 0;
+            });
+            
+            const tbody = document.getElementById('activeLoansList');
+            if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं<\/td><\/tr>'; }
+            else {
+                let htmlRows = [];
+                for (let [id, loan] of active) {
+                    let perDayDisplay = '-';
+                    if (loan.type === 'day' && loan.per_day) perDayDisplay = '₹' + loan.per_day.toFixed(2);
+                    let customerDisplay = loan.user_name;
+                    let customerAddress = '';
+                    if (users[loan.user_id] && users[loan.user_id].address) {
+                        customerAddress = users[loan.user_id].address;
+                        customerDisplay = loan.user_name;
+                    }
+                    htmlRows.push(`<tr>
+                        <td class="customer-cell"><div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div><div class="customer-principal"><strong style="color:#0d47a1;">मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</strong></div></td>
+                        <td class="remaining-amount"><strong style="color:#0d47a1;">₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></td>
+                        <td class="per-day-amount">${perDayDisplay}</td>
+                        <td style="text-align:center;">
+                            <div class="action-dropdown">
+                                <button class="dropdown-icon-btn" onclick="this.parentElement.classList.toggle('active')">▼</button>
+                                <div class="action-dropdown-content">
+                                    <button class="info" onclick="showLoanDetails('${id}'); event.stopPropagation();">📋 ${t('details')}</button>
+                                    <button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button>
+                                    ${currentUser && currentUser.role === 'officer' ? `<button style="background:#27ae60;" onclick="openPaymentModal('${id}'); event.stopPropagation();">💰 ${t('payment')}</button>` : ''}
+                                    ${currentUser && currentUser.role === 'officer' ? `<button style="background:#16a085;" onclick="openBulkPaymentModal('${id}'); event.stopPropagation();">📋 Bulk</button>` : ''}
+                                    <button class="payedit" onclick="openPaymentEditList('${id}'); event.stopPropagation();">📝 Pay Edit</button>
+                                    ${currentUser && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button>` : ''}
+                                    ${currentUser && currentUser.role === 'officer' && loan.type === 'month' && loan.status === 'active' ? `<button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button>` : ''}
+                                    <button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>
+                                    <button style="background:#8e44ad;" onclick="openReceiptModal('${id}'); event.stopPropagation();">🧾 रसीद</button>
+                                    <button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button>
+                                </div>
                             </div>
-                        </div>
-                    <\/td>
-                </tr>`;
+                        <\/td>
+                    </tr>`);
+                }
+                tbody.innerHTML = htmlRows.join('');
             }
-        }
-        
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.action-dropdown')) {
-                document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
-            }
+            
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('.action-dropdown')) {
+                    document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
+                }
+            });
+            
+            if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
+            document.getElementById('datePicker').value = getTodayDateForInput();
+            showCollectionByDate();
+            initMobileTabs();
+            showOverdueAlert();
         });
-        
-        if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
-        document.getElementById('datePicker').value = getTodayDateForInput();
-        showCollectionByDate();
-        initMobileTabs();
-        showOverdueAlert();
     }
     
     async function loadData() {
@@ -3019,6 +3285,31 @@
         currentUser = null;
     }
     
+    let refreshInterval = null;
+    let syncInterval = null;
+    
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            if (refreshInterval) clearInterval(refreshInterval);
+            if (syncInterval) clearInterval(syncInterval);
+            refreshInterval = null;
+            syncInterval = null;
+        } else {
+            if (!refreshInterval) {
+                refreshInterval = setInterval(() => { 
+                    if (currentUser && !document.hidden) refreshUI(); 
+                }, 60000);
+            }
+            if (!syncInterval && navigator.onLine) {
+                syncInterval = setInterval(() => { 
+                    if (navigator.onLine && currentUser && supabaseClient && !document.hidden) {
+                        syncFromSupabase().catch(err => console.error(err));
+                    } 
+                }, 10 * 60 * 1000);
+            }
+        }
+    });
+    
     window.updateOnlineStatus = function() {
         const indicator = document.getElementById('offlineIndicator');
         if (navigator.onLine) {
@@ -3049,8 +3340,8 @@
         window.addEventListener('offline', window.updateOnlineStatus);
         window.updateOnlineStatus();
         loadData();
-        setInterval(() => { if (currentUser) refreshUI(); }, 30000);
-        setInterval(() => { if (navigator.onLine && currentUser && supabaseClient) { syncFromSupabase().catch(err => console.error(err)); } }, 5 * 60 * 1000);
+        refreshInterval = setInterval(() => { if (currentUser && !document.hidden) refreshUI(); }, 60000);
+        syncInterval = setInterval(() => { if (navigator.onLine && currentUser && supabaseClient && !document.hidden) { syncFromSupabase().catch(err => console.error(err)); } }, 10 * 60 * 1000);
     });
 </script>
 </body>
