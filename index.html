@@ -235,6 +235,7 @@
         .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
         .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
         
+        /* ✅ FIXED: A4 print - do column sahi se align */
         @media print {
             @page { size: A4; margin: 8mm; }
             body * { visibility: hidden; }
@@ -250,16 +251,18 @@
             .no-print, button, .header, .card, .modal, .bottom-tabs, .logout-btn, .lang-selector, .user-info { display: none !important; }
             table { page-break-inside: avoid; }
             .loan-summary { page-break-inside: avoid; }
+            
+            /* ✅ FIX: A4 page me do column sahi se align */
             .print-container .two-columns {
                 display: flex !important;
                 flex-direction: row !important;
                 justify-content: space-between !important;
-                flex-wrap: nowrap !important;
-                gap: 15px !important;
+                gap: 20px !important;
                 width: 100% !important;
                 margin: 10px 0 !important;
                 page-break-inside: avoid;
             }
+            
             .print-container .payment-column {
                 flex: 1 !important;
                 width: 48% !important;
@@ -267,26 +270,26 @@
                 margin: 0 !important;
                 page-break-inside: avoid;
             }
+            
             .print-container .payment-column table {
                 width: 100% !important;
                 font-size: 8pt !important;
                 border-collapse: collapse !important;
             }
+            
             .print-container .payment-column th,
             .print-container .payment-column td {
                 padding: 5px 3px !important;
                 font-size: 7.5pt !important;
                 border: 1px solid #aaa !important;
             }
+            
             .print-container .header, 
             .print-container .customer-details, 
             .print-container .loan-summary,
             .print-container .remark-card {
                 visibility: visible !important;
                 width: 100% !important;
-            }
-            .print-container .payment-column td {
-                word-break: break-word !important;
             }
         }
         
@@ -731,6 +734,39 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+
+        /* ✅ Action Bar - एक Line Layout */
+        .customer-action-bar {
+            background: #f0f2f5;
+            padding: 8px 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .action-buttons-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .total-baki-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 5px 15px;
+            border-radius: 20px;
+            color: white;
+            text-align: center;
+        }
+        .total-baki-box .label {
+            font-size: 10px;
+            opacity: 0.9;
+        }
+        .total-baki-box .amount {
+            font-size: 16px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -785,13 +821,14 @@
                         <div style="font-size:10px; font-weight:bold;" id="statsTitle">सम्पूर्ण जानकारी</div>
                         <button onclick="updateAllLoansTillDate()" class="update-all-btn-header" style="background:#8e44ad;">🔄 All Loan Update</button>
                     </div>
+                    <!-- ✅ NEW STATS GRID - Principal + Due separated, No Interest field -->
                     <div class="stats-grid">
-                        <div class="stat-item"><div class="stat-label" id="statTotalLoanLabel">कुल लोन</div><div class="stat-value" id="totalLoanGiven">₹0</div></div>
-                        <div class="stat-item"><div class="stat-label" id="statTotalReceivedLabel">कुल प्राप्त</div><div class="stat-value" id="totalReceived">₹0</div></div>
-                        <div class="stat-item"><div class="stat-label" id="statTotalFineLabel">कुल फाइन</div><div class="stat-value" id="totalFine">₹0</div></div>
-                        <div class="stat-item"><div class="stat-label" id="statTotalRemainingLabel">कुल बकाया</div><div class="stat-value" id="totalRemaining">₹0</div></div>
-                        <div class="stat-item"><div class="stat-label" id="statTodayLabel">आज का</div><div class="stat-value" id="todayCollection">₹0</div></div>
-                        <div class="stat-item"><div class="stat-label" id="statMonthLabel">महीने का</div><div class="stat-value" id="monthCollection">₹0</div>
+                        <div class="stat-item"><div class="stat-label">💰 कुल लोन (Principal)</div><div class="stat-value" id="totalLoanGiven">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label">📊 कुल देय (Principal+Interest)</div><div class="stat-value" id="totalDue">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label">💵 कुल प्राप्त</div><div class="stat-value" id="totalReceived">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label">📌 बकाया</div><div class="stat-value" id="totalRemaining">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label">📅 आज का</div><div class="stat-value" id="todayCollection">₹0</div></div>
+                        <div class="stat-item"><div class="stat-label">📆 महीने का</div><div class="stat-value" id="monthCollection">₹0</div>
                             <div class="month-selector">
                                 <select id="monthSelect"><option value="1">जन</option><option value="2">फर</option><option value="3">मार</option><option value="4">अप्रै</option><option value="5">मई</option><option value="6">जून</option><option value="7">जुला</option><option value="8">अग</option><option value="9">सित</option><option value="10">अक्टू</option><option value="11">नव</option><option value="12">दिस</option></select>
                                 <input type="number" id="yearSelect" style="width:50px; background:rgba(255,255,255,0.2); color:white; border:none; font-size:9px;" placeholder="साल" value="2024">
@@ -860,7 +897,7 @@
                                 <tr><th>ग्राहक</th><th>बाकी</th><th>प्रति दिन</th><th style="text-align:center;">▼</th></tr>
                             </thead>
                             <tbody id="activeLoansList"></tbody>
-                        ~
+                        </table>
                     </div>
                 </div>
             </div>
@@ -1032,6 +1069,66 @@
         }
     }
     
+    // ✅ FORCE SYNC FUNCTION - दोनों devices में same data के लिए
+    async function emergencyForceSync() {
+        if (!confirm("⚠️ यह सारा LOCAL DATA DELETE करेगा और Supabase से नया DATA LOAD करेगा!\n\nजारी रखें?")) {
+            return;
+        }
+        
+        updateSyncStatus('pending', '🔄 फोर्स सिन्क...');
+        
+        try {
+            // Clear all local storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Clear IndexedDB
+            let databases = await indexedDB.databases();
+            for (let db of databases) {
+                if (db.name && (db.name.includes('HLB') || db.name.includes('Finance'))) {
+                    indexedDB.deleteDatabase(db.name);
+                }
+            }
+            indexedDB.deleteDatabase(DB_NAME);
+            
+            // Clear global objects
+            users = {};
+            officers = {};
+            loans = {};
+            ledger = {};
+            fines = {};
+            bulkParsedRows = [];
+            currentSelectedUserId = null;
+            
+            // Reload from Supabase
+            if (supabaseClient && currentUser) {
+                let { data: loansData } = await supabaseClient.from('loans').select('*');
+                let { data: ledgerData } = await supabaseClient.from('ledger').select('*');
+                let { data: usersData } = await supabaseClient.from('users').select('*');
+                let { data: officersData } = await supabaseClient.from('officers').select('*');
+                let { data: finesData } = await supabaseClient.from('fines').select('*');
+                
+                if (loansData) loansData.forEach(l => { loans[l.id] = l; });
+                if (ledgerData) ledgerData.forEach(l => { ledger[l.id] = l; });
+                if (usersData) usersData.forEach(u => { users[u.id] = u; });
+                if (officersData) officersData.forEach(o => { officers[o.id] = o; });
+                if (finesData) finesData.forEach(f => { fines[f.id] = f; });
+                
+                await saveDataToLocal();
+                alert("✅ FORCE SYNC COMPLETE!\n\nसारा डेटा Supabase से रीलोड हो गया।\nअब Mobile और Laptop का data same होगा।");
+            } else {
+                alert("❌ Supabase connected nahi hai ya login nahi ho!");
+            }
+            
+            refreshUI();
+            updateSyncStatus('synced', '✅ सिन्क');
+        } catch(err) {
+            console.error("Force sync error:", err);
+            alert("❌ Error: " + err.message);
+            updateSyncStatus('error', '❌ एरर');
+        }
+    }
+    
     function initSupabase() {
         if (typeof supabase === 'undefined') {
             setTimeout(initSupabase, 500);
@@ -1146,7 +1243,7 @@
             // ✅ CRITICAL: Recalculate monthly interest after loading data
             checkMonthlyInterest();
             
-            // ✅ FIX 1: Day loans recalculation
+            // ✅ Day loans recalculation
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
@@ -1159,7 +1256,6 @@
                     if (correctRemaining !== loan.remaining_amount) {
                         loan.remaining_amount = correctRemaining;
                         if (loan.remaining_amount <= 0) loan.status = 'completed';
-                        console.log(`🔧 Fixed day loan ${loan.user_name}: remaining = ₹${loan.remaining_amount}`);
                     }
                 }
             }
@@ -1424,127 +1520,6 @@
         }
     }
     
-    // ✅ FIX 2: EMERGENCY FORCE SYNC FUNCTION - 100% WORKING
-    async function emergencyForceSync() {
-        if (!confirm("⚠️ यह सारा LOCAL DATA DELETE करेगा और Supabase से नया DATA LOAD करेगा!\n\nजारी रखें?")) {
-            return;
-        }
-        
-        console.log("🚨 EMERGENCY FORCE SYNC STARTED...");
-        updateSyncStatus('pending', '🔄 FORCE SYNC...');
-        
-        try {
-            // Clear localStorage
-            localStorage.clear();
-            sessionStorage.clear();
-            console.log("✅ localStorage cleared");
-            
-            // Clear IndexedDB
-            let databases = await indexedDB.databases();
-            for (let db of databases) {
-                if (db.name) {
-                    indexedDB.deleteDatabase(db.name);
-                    console.log(`✅ Deleted database: ${db.name}`);
-                }
-            }
-            indexedDB.deleteDatabase(DB_NAME);
-            console.log("✅ IndexedDB cleared");
-            
-            // Clear global objects
-            users = {};
-            officers = {};
-            loans = {};
-            ledger = {};
-            fines = {};
-            bulkParsedRows = [];
-            currentSelectedUserId = null;
-            console.log("✅ Global objects cleared");
-            
-            // Reload from Supabase
-            if (supabaseClient && currentUser) {
-                console.log("🔄 Loading data from Supabase...");
-                
-                // Fetch users
-                let { data: usersData } = await supabaseClient.from('users').select('*');
-                if (usersData) {
-                    users = {};
-                    usersData.forEach(u => { users[u.id] = u; });
-                    console.log(`✅ Loaded ${usersData.length} users`);
-                }
-                
-                // Fetch officers
-                let { data: officersData } = await supabaseClient.from('officers').select('*');
-                if (officersData) {
-                    officers = {};
-                    officersData.forEach(o => { officers[o.id] = o; });
-                    console.log(`✅ Loaded ${officersData.length} officers`);
-                }
-                
-                // Fetch loans
-                let { data: loansData } = await supabaseClient.from('loans').select('*');
-                if (loansData) {
-                    loans = {};
-                    loansData.forEach(l => { loans[l.id] = l; });
-                    console.log(`✅ Loaded ${loansData.length} loans`);
-                }
-                
-                // Fetch ledger
-                let { data: ledgerData } = await supabaseClient.from('ledger').select('*');
-                if (ledgerData) {
-                    ledger = {};
-                    ledgerData.forEach(l => { ledger[l.id] = l; });
-                    console.log(`✅ Loaded ${ledgerData.length} ledger entries`);
-                }
-                
-                // Fetch fines
-                let { data: finesData } = await supabaseClient.from('fines').select('*');
-                if (finesData) {
-                    fines = {};
-                    finesData.forEach(f => { fines[f.id] = f; });
-                    console.log(`✅ Loaded ${finesData.length} fines`);
-                }
-                
-                // Recalculate day loans
-                for (let [loanId, loan] of Object.entries(loans)) {
-                    if (loan.type === 'day') {
-                        let totalPaid = 0;
-                        for (let [id, entry] of Object.entries(ledger)) {
-                            if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
-                                totalPaid += entry.amount_paid;
-                            }
-                        }
-                        loan.remaining_amount = Math.max(0, loan.total_amount - totalPaid);
-                        if (loan.remaining_amount <= 0) loan.status = 'completed';
-                        loans[loanId] = loan;
-                    }
-                }
-                
-                // Recalculate monthly interest
-                checkMonthlyInterest();
-                
-                // Save to local storage
-                await saveDataToLocal();
-                console.log("✅ Data saved to local storage");
-                
-            } else {
-                alert("❌ Supabase connected nahi hai ya login nahi ho!");
-                updateSyncStatus('error', '❌ FAILED');
-                return;
-            }
-            
-            // Refresh UI
-            refreshUI();
-            
-            updateSyncStatus('synced', '✅ SYNC DONE');
-            alert("✅ FORCE SYNC COMPLETE!\n\nसारा डेटा Supabase से रीलोड हो गया।\nअब Mobile और Laptop का data same होगा।");
-            
-        } catch(err) {
-            console.error("Force sync error:", err);
-            alert("❌ Error: " + err.message);
-            updateSyncStatus('error', '❌ ERROR');
-        }
-    }
-    
     async function checkLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
@@ -1652,15 +1627,20 @@
         document.getElementById('monthCollection').innerHTML = `₹${total.toLocaleString('en-IN')}`;
     }
     
+    // ✅ FIXED: New stats function - Principal and Due separated
     function updateStats() {
-        let totalLoanGiven = 0, totalReceived = 0, totalFine = 0, totalRemaining = 0, todayCollection = 0;
+        let totalPrincipal = 0;
+        let totalInterest = 0;
+        let totalReceived = 0;
+        let todayCollection = 0;
         const today = getTodayDate();
+        
         for (let [id, loan] of Object.entries(loans)) {
             if (currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
-            totalLoanGiven += (loan.original_principal || loan.principal);
-            if (loan.status === 'active') totalRemaining += loan.remaining_amount;
-            totalFine += (loan.total_fine || 0);
+            totalPrincipal += (loan.original_principal || loan.principal);
+            totalInterest += (loan.total_interest || 0);
         }
+        
         for (let [id, entry] of Object.entries(ledger)) {
             if (currentUser.role === 'officer' && entry.officer_id !== currentUser.officerId) continue;
             if (entry.type === 'payment' || entry.type === 'direct') {
@@ -1668,11 +1648,16 @@
                 if (entry.date === today) todayCollection += entry.amount_paid;
             }
         }
-        document.getElementById('totalLoanGiven').innerHTML = `₹${totalLoanGiven.toLocaleString('en-IN')}`;
+        
+        let totalDue = totalPrincipal + totalInterest;
+        let totalRemaining = Math.max(0, totalDue - totalReceived);
+        
+        document.getElementById('totalLoanGiven').innerHTML = `₹${totalPrincipal.toLocaleString('en-IN')}`;
+        document.getElementById('totalDue').innerHTML = `₹${totalDue.toLocaleString('en-IN')}`;
         document.getElementById('totalReceived').innerHTML = `₹${totalReceived.toLocaleString('en-IN')}`;
-        document.getElementById('totalFine').innerHTML = `₹${totalFine.toLocaleString('en-IN')}`;
         document.getElementById('totalRemaining').innerHTML = `₹${totalRemaining.toLocaleString('en-IN')}`;
         document.getElementById('todayCollection').innerHTML = `₹${todayCollection.toLocaleString('en-IN')}`;
+        
         document.getElementById('monthSelect').value = getCurrentMonth();
         document.getElementById('yearSelect').value = getCurrentYear();
         updateMonthCollection();
@@ -1866,7 +1851,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         <\/td>
-                      <tr>`;
+                       </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -2092,6 +2077,7 @@
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
     
+    // ✅ FIXED: selectCustomer with Total Baki Box - एक Line Layout
     function selectCustomer(userId, userName) {
         document.getElementById('searchInput').value = userName;
         document.getElementById('searchSuggestions').style.display = 'none';
@@ -2099,8 +2085,35 @@
         let customerLoans = Object.entries(loans).filter(([id,l]) => l.user_id === userId);
         if (showOnlyCompletedLoans) { customerLoans = customerLoans.filter(([id,l]) => l.status === 'completed'); }
         else { customerLoans = customerLoans.filter(([id,l]) => l.status === 'active'); }
-        const customer = users[userId];
-        let html = `<div style="background:#f0f2f5; padding:8px; border-radius:6px;"><div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;"><div class="search-header-buttons"><button id="toggleCompletedBtn" class="filter-btn small" onclick="toggleCompletedLoans()" style="${showOnlyCompletedLoans ? 'background:#27ae60;' : 'background:#8e44ad;'}">✅ ${showOnlyCompletedLoans ? 'एक्टिव लोन' : 'पूरे हुए लोन'}</button><button class="small info" onclick="editCustomer('${userId}')">✏️ ग्राहक एडिट</button><button class="danger small" onclick="deleteCustomer('${userId}','${userName}')">${t('deleteCustomer')}</button></div></div></div>`;
+        
+        // Calculate total remaining for this customer
+        let totalRemaining = 0;
+        for (let [id, loan] of customerLoans) {
+            totalRemaining += loan.remaining_amount;
+        }
+        
+        // ✅ New Action Bar - एक Line Layout with Total Baki Box
+        let actionBar = `
+            <div class="customer-action-bar">
+                <div class="action-buttons-group">
+                    <button id="toggleCompletedBtn" class="filter-btn small" onclick="toggleCompletedLoans()" style="${showOnlyCompletedLoans ? 'background:#27ae60;' : 'background:#8e44ad;'} color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer;">
+                        ✅ ${showOnlyCompletedLoans ? 'एक्टिव लोन' : 'पूरे हुए लोन'}
+                    </button>
+                    <button class="small info" onclick="editCustomer('${userId}')" style="background:#3498db; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer;">
+                        ✏️ ग्राहक एडिट
+                    </button>
+                    <button class="danger small" onclick="deleteCustomer('${userId}','${userName}')" style="background:#e74c3c; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer;">
+                        🗑️ ग्राहक डिलीट
+                    </button>
+                </div>
+                <div class="total-baki-box">
+                    <div class="label">📊 कुल बकाया</div>
+                    <div class="amount">₹${totalRemaining.toLocaleString('en-IN')}</div>
+                </div>
+            </div>
+        `;
+        
+        let html = actionBar;
         if (!customerLoans.length) { html += '<p style="padding:8px;">कोई लोन नहीं</p>'; }
         else {
             for (let [id, loan] of customerLoans) {
@@ -2461,8 +2474,8 @@
                 ${remarkHtml}
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}</td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}</td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-<\/td><\/tr>' : ''}</tbody></table></div>
+                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
+                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-<\/td><\/tr>' : ''}</tbody></table></div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
             </div>
@@ -2611,7 +2624,7 @@
         if (errors.length) { html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">⚠️ ${errors.length} लाइन में गड़बड़ी:<br>${errors.join('<br>')}</div>`; }
         if (bulkParsedRows.length > 0) {
             html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th></tr></thead><tbody>`;
-            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}</td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td><td style="padding:4px;">${bulkParsedRows[i].date}</td></tr>`; }
+            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}<\/td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}<\/td><td style="padding:4px;">${bulkParsedRows[i].date}<\/td><\/tr>`; }
             html += `</tbody></table>`;
             html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
@@ -2989,6 +3002,7 @@
         reader.readAsText(file);
     }
     
+    // ✅ FIXED: showOverdueAlert with correct sorting (31,32,33...)
     function showOverdueAlert() {
         let overdueList = [];
         let today = new Date();
@@ -3014,7 +3028,7 @@
                 }
             }
         }
-        // ✅ FIX 3: Sort by days overdue ASCENDING (31 दिन पहले, फिर 32, 33, 34...)
+        // ✅ ASCENDING order: 31 दिन पहले, फिर 32, 33, 34...
         overdueList.sort((a, b) => a.daysOverdue - b.daysOverdue);
         let alertHtml = '';
         if (overdueList.length === 0) { alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>'; }
@@ -3085,7 +3099,7 @@
     
     function refreshUI() {
         requestAnimationFrame(() => {
-            // ✅ FIX 1: Day loans recalculation already in syncFromSupabase, but also do here
+            // ✅ Day loans recalculation
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
