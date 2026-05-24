@@ -235,7 +235,6 @@
         .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
         .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
         
-        /* ✅ FIXED: A4 print - do column sahi se align */
         @media print {
             @page { size: A4; margin: 8mm; }
             body * { visibility: hidden; }
@@ -252,7 +251,6 @@
             table { page-break-inside: avoid; }
             .loan-summary { page-break-inside: avoid; }
             
-            /* ✅ FIX: A4 page me do column sahi se align */
             .print-container .two-columns {
                 display: flex !important;
                 flex-direction: row !important;
@@ -735,7 +733,6 @@
             cursor: not-allowed;
         }
 
-        /* ✅ Action Bar - एक Line Layout */
         .customer-action-bar {
             background: #f0f2f5;
             padding: 8px 12px;
@@ -821,7 +818,6 @@
                         <div style="font-size:10px; font-weight:bold;" id="statsTitle">सम्पूर्ण जानकारी</div>
                         <button onclick="updateAllLoansTillDate()" class="update-all-btn-header" style="background:#8e44ad;">🔄 All Loan Update</button>
                     </div>
-                    <!-- ✅ NEW STATS GRID - Principal + Due separated, No Interest field -->
                     <div class="stats-grid">
                         <div class="stat-item"><div class="stat-label">💰 कुल लोन (Principal)</div><div class="stat-value" id="totalLoanGiven">₹0</div></div>
                         <div class="stat-item"><div class="stat-label">📊 कुल देय (Principal+Interest)</div><div class="stat-value" id="totalDue">₹0</div></div>
@@ -1040,6 +1036,7 @@
     let bulkParsedRows = [];
     let editingCustomerId = null;
     let saveTimeout = null;
+    let syncAfterOnlineDone = false;  // CHANGE #3: Auto sync flag
     
     const GITHUB_USERS_URL = "users.json";
     const DB_NAME = 'HLBFinanceDB';
@@ -1069,7 +1066,6 @@
         }
     }
     
-    // ✅ FORCE SYNC FUNCTION - दोनों devices में same data के लिए
     async function emergencyForceSync() {
         if (!confirm("⚠️ यह सारा LOCAL DATA DELETE करेगा और Supabase से नया DATA LOAD करेगा!\n\nजारी रखें?")) {
             return;
@@ -1078,11 +1074,9 @@
         updateSyncStatus('pending', '🔄 फोर्स सिन्क...');
         
         try {
-            // Clear all local storage
             localStorage.clear();
             sessionStorage.clear();
             
-            // Clear IndexedDB
             let databases = await indexedDB.databases();
             for (let db of databases) {
                 if (db.name && (db.name.includes('HLB') || db.name.includes('Finance'))) {
@@ -1091,7 +1085,6 @@
             }
             indexedDB.deleteDatabase(DB_NAME);
             
-            // Clear global objects
             users = {};
             officers = {};
             loans = {};
@@ -1100,7 +1093,6 @@
             bulkParsedRows = [];
             currentSelectedUserId = null;
             
-            // Reload from Supabase
             if (supabaseClient && currentUser) {
                 let { data: loansData } = await supabaseClient.from('loans').select('*');
                 let { data: ledgerData } = await supabaseClient.from('ledger').select('*');
@@ -1231,7 +1223,6 @@
                 officersData.data.forEach(o => { newOfficers[o.id] = o; });
             }
             
-            // Merge with existing data
             users = {...users, ...newUsers};
             loans = {...loans, ...newLoans};
             ledger = {...ledger, ...newLedger};
@@ -1240,10 +1231,8 @@
             
             console.log(`📊 After sync - Total loans: ${Object.keys(loans).length}, Monthly: ${Object.values(loans).filter(l => l.type === 'month').length}`);
             
-            // ✅ CRITICAL: Recalculate monthly interest after loading data
             checkMonthlyInterest();
             
-            // ✅ Day loans recalculation
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
@@ -1627,7 +1616,6 @@
         document.getElementById('monthCollection').innerHTML = `₹${total.toLocaleString('en-IN')}`;
     }
     
-    // ✅ FIXED: New stats function - Principal and Due separated
     function updateStats() {
         let totalPrincipal = 0;
         let totalInterest = 0;
@@ -1851,7 +1839,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         <\/td>
-                       </tr>`;
+                    </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -2077,7 +2065,10 @@
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
     
-    // ✅ FIXED: selectCustomer with Total Baki Box - एक Line Layout
+    // ============================================
+    // CHANGE #4: LOAN CARD ME DATE BOLD
+    // CHANGE #1: ग्राहक एडिट BUTTON WORKING
+    // ============================================
     function selectCustomer(userId, userName) {
         document.getElementById('searchInput').value = userName;
         document.getElementById('searchSuggestions').style.display = 'none';
@@ -2086,13 +2077,11 @@
         if (showOnlyCompletedLoans) { customerLoans = customerLoans.filter(([id,l]) => l.status === 'completed'); }
         else { customerLoans = customerLoans.filter(([id,l]) => l.status === 'active'); }
         
-        // Calculate total remaining for this customer
         let totalRemaining = 0;
         for (let [id, loan] of customerLoans) {
             totalRemaining += loan.remaining_amount;
         }
         
-        // ✅ New Action Bar - एक Line Layout with Total Baki Box
         let actionBar = `
             <div class="customer-action-bar">
                 <div class="action-buttons-group">
@@ -2124,7 +2113,8 @@
                 if (loan.created_from_principal && loan.previous_loan_id) { oldLoanInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || `🔁 यह लोन पुराने लोन #${loan.previous_loan_id} से मूलधन जमा करके बनाया गया है।`}</div>`; }
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || `🔒 यह लोन मूलधन जमा करके बंद किया गया।`}</div>`; }
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: ${loan.start_date} | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')} | ब्याज दर: ${loan.interest_rate}%</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}<button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button>${loan.status === 'active' && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}${currentUser.role === 'officer' && loan.status === 'active' && loan.type === 'month' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}<button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
+                // CHANGE #4: Date bold kiya gaya hai - <strong> tag added
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')} | ब्याज दर: ${loan.interest_rate}%</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button>${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button>` : ''}${loan.status === 'active' && currentUser.role === 'officer' ? `<button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button>` : ''}<button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button>${loan.status === 'active' && currentUser.role === 'officer' && loan.type === 'day' ? `<button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button>` : ''}${currentUser.role === 'officer' && loan.status === 'active' && loan.type === 'month' ? `<button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button>` : ''}<button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
             }
         }
         html += `</div>`;
@@ -2137,6 +2127,154 @@
             const customer = users[currentSelectedUserId];
             if (customer) selectCustomer(currentSelectedUserId, customer.name);
         }
+    }
+    
+    // ============================================
+    // CHANGE #1: ग्राहक एडिट FUNCTIONS
+    // ============================================
+    function editCustomer(userId) {
+        const user = users[userId];
+        if (!user) {
+            alert('❌ ग्राहक नहीं मिला!');
+            return;
+        }
+        
+        editingCustomerId = userId;
+        document.getElementById('newCustomerName').value = user.name;
+        document.getElementById('newCustomerMobile').value = user.mobile;
+        document.getElementById('newCustomerAddress').value = user.address || '';
+        document.getElementById('newCustomerModalTitle').innerHTML = '✏️ ग्राहक एडिट करें';
+        const btn = document.getElementById('newCustomerSubmitBtn');
+        btn.innerHTML = '💾 सेव करें';
+        btn.onclick = updateCustomerFromModal;
+        document.getElementById('newCustomerModal').style.display = 'flex';
+    }
+    
+    async function updateCustomerFromModal() {
+        const userId = editingCustomerId;
+        if (!userId) {
+            alert('❌ Error: कोई ग्राहक सेलेक्ट नहीं है!');
+            return;
+        }
+        
+        const newName = document.getElementById('newCustomerName').value.trim();
+        const newMobile = document.getElementById('newCustomerMobile').value.trim();
+        const newAddress = document.getElementById('newCustomerAddress').value.trim();
+        
+        if (!newName || !newMobile || !newAddress) {
+            alert('नाम, मोबाइल और पता भरें!');
+            return;
+        }
+        
+        for (let [id, u] of Object.entries(users)) {
+            if (id !== userId && u.mobile === newMobile) {
+                alert(`⚠️ यह मोबाइल नंबर "${newMobile}" पहले से ग्राहक "${u.name}" के पास है!`);
+                return;
+            }
+        }
+        
+        const oldUser = users[userId];
+        const oldName = oldUser.name;
+        
+        users[userId] = {
+            ...oldUser,
+            name: newName,
+            mobile: newMobile,
+            address: newAddress
+        };
+        
+        for (let [loanId, loan] of Object.entries(loans)) {
+            if (loan.user_id === userId) {
+                loan.user_name = newName;
+                loans[loanId] = loan;
+                if (supabaseClient && navigator.onLine) {
+                    await saveToSupabase('loans', loan);
+                }
+            }
+        }
+        
+        for (let [ledgerId, entry] of Object.entries(ledger)) {
+            if (entry.user_id === userId) {
+                entry.user_name = newName;
+                ledger[ledgerId] = entry;
+                if (supabaseClient && navigator.onLine) {
+                    await saveToSupabase('ledger', entry);
+                }
+            }
+        }
+        
+        for (let [fineId, fine] of Object.entries(fines)) {
+            if (fine.user_id === userId) {
+                fine.user_name = newName;
+                fines[fineId] = fine;
+                if (supabaseClient && navigator.onLine) {
+                    await saveToSupabase('fines', fine);
+                }
+            }
+        }
+        
+        if (supabaseClient && navigator.onLine) {
+            await saveToSupabase('users', users[userId]);
+        }
+        
+        await saveDataToLocal();
+        refreshUI();
+        closeNewCustomerModal();
+        
+        if (currentSelectedUserId === userId) {
+            selectCustomer(userId, newName);
+        }
+        
+        alert(`✅ ग्राहक अपडेट हो गया!\n\n"${oldName}" → "${newName}"\n📞 ${newMobile}\n📍 ${newAddress}`);
+    }
+    
+    function closeNewCustomerModal() {
+        document.getElementById('newCustomerModal').style.display = 'none';
+        document.getElementById('newCustomerName').value = '';
+        document.getElementById('newCustomerMobile').value = '';
+        document.getElementById('newCustomerAddress').value = '';
+        document.getElementById('newCustomerModalTitle').innerHTML = '👤 नया ग्राहक';
+        const btn = document.getElementById('newCustomerSubmitBtn');
+        btn.innerHTML = '✅ ग्राहक बनाएं';
+        btn.onclick = createCustomerFromModal;
+        editingCustomerId = null;
+    }
+    
+    function createCustomerFromModal() {
+        const name = document.getElementById('newCustomerName').value.trim();
+        const mobile = document.getElementById('newCustomerMobile').value.trim();
+        const address = document.getElementById('newCustomerAddress').value.trim();
+        
+        if (!name || !mobile || !address) {
+            alert('नाम, मोबाइल, पता भरें!');
+            return;
+        }
+        
+        for (let [id, u] of Object.entries(users)) {
+            if (u.mobile === mobile) {
+                alert(`⚠️ यह मोबाइल नंबर "${mobile}" पहले से ग्राहक "${u.name}" के पास है!\n\nदूसरा मोबाइल नंबर डालें।`);
+                return;
+            }
+        }
+        
+        const id = Date.now().toString();
+        users[id] = {
+            id,
+            name,
+            mobile,
+            address,
+            officer_id: currentUser.officerId || currentUser.id,
+            created_date: getTodayDate()
+        };
+        
+        if (supabaseClient && navigator.onLine) {
+            saveToSupabase('users', users[id]);
+        }
+        
+        saveData();
+        refreshUI();
+        closeNewCustomerModal();
+        alert(`✅ नया ग्राहक "${name}" बन गया!`);
     }
     
     function renameCustomer(userId) {
@@ -2474,7 +2612,7 @@
                 ${remarkHtml}
                 <div class="section-title">▶ कलेक्शन (पेमेंट)</div>
                 <div class="two-columns">
-                    <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
+                    <div class="payment-column"><tr><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col1.length === 0 ? '<tr><td colspan="4" style="text-align:center">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
                     <div class="payment-column"><table><thead><tr><th class="text-center">#</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th></tr></thead><tbody>${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4" style="text-align:center">-<\/td><\/tr>' : ''}</tbody></table></div>
                 </div>
                 <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div>
@@ -2582,53 +2720,174 @@
     
     function closeBulkPaymentModal() { document.getElementById('bulkPaymentModal').style.display = 'none'; bulkParsedRows = []; }
     
-    function parseAmount(str) { return parseFloat(str.replace(/[₹,\s]/g, '')) || 0; }
+    // ============================================
+    // CHANGE #2: BULK PAYMENT - MULTIPLE DATE FORMATS
+    // ============================================
+    function parseAmount(str) {
+        if (!str) return 0;
+        let cleaned = str.toString().replace(/[₹,\s]/g, '');
+        let match = cleaned.match(/(\d+(?:\.\d+)?)/);
+        if (match) {
+            return parseFloat(match[1]) || 0;
+        }
+        return 0;
+    }
     
     function parseDateTime(str) {
-        if (!str) return getTodayDate();
-        str = str.trim();
-        let dd, mm, yyyy;
-        let m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (m) { dd = parseInt(m[1]); mm = parseInt(m[2]); yyyy = parseInt(m[3]); }
-        if (!dd) {
-            m = str.match(/^(\d{1,2})[\/\-\s](\d{4})/);
-            if (m) { dd = parseInt(m[1]); yyyy = parseInt(m[2]); mm = getCurrentMonth(); }
+        if (!str || str.trim() === '') return getTodayDate();
+        
+        let input = str.toString().trim();
+        input = input.replace(/[₹,\s]/g, ' ');
+        
+        let dateStr = '';
+        
+        // Pattern 1: DD/MM/YYYY or DD-MM-YYYY
+        let match = input.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (match) {
+            let dd = match[1].padStart(2, '0');
+            let mm = match[2].padStart(2, '0');
+            let yyyy = match[3];
+            if (yyyy.length === 2) yyyy = '20' + yyyy;
+            dateStr = `${dd}/${mm}/${yyyy}`;
         }
-        if (dd && mm && yyyy) return `${String(dd).padStart(2,'0')}/${String(mm).padStart(2,'0')}/${yyyy}`;
+        
+        // Pattern 2: DD-MMM-YY or DD-MMM-YYYY (e.g., 01-jan26)
+        if (!dateStr) {
+            let monthNames = {
+                'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
+                'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+            };
+            let match2 = input.match(/(\d{1,2})[\/\-](\w+)[\/\-](\d{2,4})/i);
+            if (match2) {
+                let dd = match2[1].padStart(2, '0');
+                let monthText = match2[2].toLowerCase().substring(0, 3);
+                let mm = monthNames[monthText];
+                let yyyy = match2[3];
+                if (mm) {
+                    if (yyyy.length === 2) yyyy = '20' + yyyy;
+                    dateStr = `${dd}/${mm}/${yyyy}`;
+                }
+            }
+        }
+        
+        // Pattern 3: Just DD/MM or DD-MM (current year)
+        if (!dateStr) {
+            let match3 = input.match(/(\d{1,2})[\/\-](\d{1,2})/);
+            if (match3) {
+                let dd = match3[1].padStart(2, '0');
+                let mm = match3[2].padStart(2, '0');
+                let yyyy = new Date().getFullYear();
+                dateStr = `${dd}/${mm}/${yyyy}`;
+            }
+        }
+        
+        if (dateStr) {
+            let parts = dateStr.split('/');
+            let d = parseInt(parts[0]);
+            let m = parseInt(parts[1]);
+            let y = parseInt(parts[2]);
+            let testDate = new Date(y, m-1, d);
+            if (testDate.getDate() === d && testDate.getMonth() === m-1) {
+                return dateStr;
+            }
+        }
+        
+        // Fallback: try to find any numbers that look like a date
+        let numbers = input.match(/\d+/g);
+        if (numbers && numbers.length >= 3) {
+            let dd = numbers[0].padStart(2, '0');
+            let mm = numbers[1].padStart(2, '0');
+            let yyyy = numbers[2];
+            if (yyyy.length === 2) yyyy = '20' + yyyy;
+            if (parseInt(dd) <= 31 && parseInt(mm) <= 12) {
+                return `${dd}/${mm}/${yyyy}`;
+            }
+        }
+        
         return getTodayDate();
     }
     
     function parseBulkPayment() {
         const text = document.getElementById('bulkPasteArea').value.trim();
         if (!text) { alert('कुछ paste करें!'); return; }
+        
         const lines = text.split('\n').filter(l => l.trim());
         bulkParsedRows = [];
         let errors = [];
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
-            const cols = line.split('\t');
-            if (cols.length < 2) { errors.push(`Line ${i+1}: दो column नहीं मिले`); continue; }
+            
+            let cols = line.split(/\t|\s{2,}/);
+            if (cols.length < 2) {
+                let amountMatch = line.match(/(\d+(?:\.\d+)?)/);
+                let dateMatch = line.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}[\/\-]\w+[\/\-]\d{2,4})/i);
+                if (amountMatch && dateMatch) {
+                    cols = [amountMatch[1], dateMatch[0]];
+                } else {
+                    errors.push(`Line ${i+1}: सही format नहीं (Amount और Date दोनों चाहिए)`);
+                    continue;
+                }
+            }
+            
             const amount = parseAmount(cols[0]);
             const dateStr = parseDateTime(cols[1]);
-            if (!amount || amount <= 0) { errors.push(`Line ${i+1}: राशि गलत`); continue; }
+            
+            if (!amount || amount <= 0) {
+                errors.push(`Line ${i+1}: राशि गलत (${cols[0]})`);
+                continue;
+            }
+            
             bulkParsedRows.push({ amount, date: dateStr });
         }
-        bulkParsedRows.sort((a, b) => { const toMs = d => { const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]).getTime(); }; return toMs(a.date) - toMs(b.date); });
+        
+        bulkParsedRows.sort((a, b) => {
+            const toMs = d => {
+                const p = d.split('/');
+                return new Date(p[2], p[1]-1, p[0]).getTime();
+            };
+            return toMs(a.date) - toMs(b.date);
+        });
+        
         const loanId = document.getElementById('bulkLoanId').value;
         const loan = loans[loanId];
         let remaining = loan ? loan.remaining_amount : 0;
         let totalAmount = 0;
         for (let r of bulkParsedRows) totalAmount += r.amount;
+        
         let html = '';
-        if (errors.length) { html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">⚠️ ${errors.length} लाइन में गड़बड़ी:<br>${errors.join('<br>')}</div>`; }
+        if (errors.length) {
+            html += `<div style="background:#ffeaea;padding:6px;border-radius:6px;font-size:10px;margin-bottom:6px;color:#c0392b;">
+                ⚠️ ${errors.length} error(s):<br>${errors.join('<br>')}
+            </div>`;
+        }
+        
         if (bulkParsedRows.length > 0) {
-            html += `<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#27ae60;color:white;"><th style="padding:4px;">क्र.</th><th style="padding:4px;text-align:left;">राशि</th><th style="padding:4px;text-align:left;">तारीख</th></tr></thead><tbody>`;
-            for (let i = 0; i < bulkParsedRows.length; i++) { html += `<tr><td style="padding:4px;text-align:center;">${i+1}<\/td><td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}<\/td><td style="padding:4px;">${bulkParsedRows[i].date}<\/td><\/tr>`; }
+            html += `<table style="width:100%;border-collapse:collapse;font-size:11px;">
+                <thead><tr style="background:#27ae60;color:white;">
+                    <th style="padding:4px;">#</th>
+                    <th style="padding:4px;text-align:left;">राशि</th>
+                    <th style="padding:4px;text-align:left;">तारीख</th>
+                </table></thead><tbody>`;
+            for (let i = 0; i < bulkParsedRows.length; i++) {
+                html += `<tr>
+                    <td style="padding:4px;text-align:center;">${i+1}</td>
+                    <td style="padding:4px;">₹${bulkParsedRows[i].amount.toLocaleString('en-IN')}</td>
+                    <td style="padding:4px;">${bulkParsedRows[i].date}</td>
+                </tr>`;
+            }
             html += `</tbody></table>`;
-            html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;"><strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br><strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}</div>`;
+            html += `<div style="background:#e8f5e9;padding:6px;border-radius:6px;font-size:11px;margin-top:6px;">
+                <strong>कुल entries:</strong> ${bulkParsedRows.length} &nbsp;|&nbsp; 
+                <strong>कुल राशि:</strong> ₹${totalAmount.toLocaleString('en-IN')}<br>
+                <strong>अभी बाकी:</strong> ₹${remaining.toLocaleString('en-IN')} &nbsp;|&nbsp; 
+                <strong>बाद में बाकी:</strong> ₹${Math.max(0, remaining - totalAmount).toLocaleString('en-IN')}
+            </div>`;
             document.getElementById('bulkSubmitBtn').disabled = false;
-        } else { document.getElementById('bulkSubmitBtn').disabled = true; }
+        } else {
+            document.getElementById('bulkSubmitBtn').disabled = true;
+        }
         document.getElementById('bulkPreview').innerHTML = html;
     }
     
@@ -2823,50 +3082,6 @@
         document.getElementById('newCustomerModal').style.display = 'flex';
     }
     
-    function closeNewCustomerModal() {
-        document.getElementById('newCustomerModal').style.display = 'none';
-        document.getElementById('newCustomerName').value = '';
-        document.getElementById('newCustomerMobile').value = '';
-        document.getElementById('newCustomerAddress').value = '';
-        document.getElementById('newCustomerModalTitle').innerHTML = '👤 नया ग्राहक';
-        const btn = document.getElementById('newCustomerSubmitBtn');
-        btn.innerHTML = '✅ ग्राहक बनाएं';
-        btn.onclick = createCustomerFromModal;
-        editingCustomerId = null;
-    }
-    
-    function createCustomerFromModal() {
-        const name = document.getElementById('newCustomerName').value.trim();
-        const mobile = document.getElementById('newCustomerMobile').value.trim();
-        const address = document.getElementById('newCustomerAddress').value.trim();
-        if (!name || !mobile || !address) {
-            alert('नाम, मोबाइल, पता भरें!');
-            return;
-        }
-        
-        for (let [id, u] of Object.entries(users)) {
-            if (u.mobile === mobile) {
-                alert(`⚠️ यह मोबाइल नंबर "${mobile}" पहले से ग्राहक "${u.name}" के पास है!\n\nदूसरा मोबाइल नंबर डालें।`);
-                return;
-            }
-        }
-        
-        const id = Date.now().toString();
-        users[id] = {
-            id,
-            name,
-            mobile,
-            address,
-            officer_id: currentUser.officerId || currentUser.id,
-            created_date: getTodayDate()
-        };
-        
-        saveData();
-        refreshUI();
-        closeNewCustomerModal();
-        alert(`✅ नया ग्राहक "${name}" बन गया!`);
-    }
-    
     function openNewLoanModal() {
         document.getElementById('loanStartDate').value = getTodayDateForInput();
         calculateDayLoan();
@@ -3002,7 +3217,6 @@
         reader.readAsText(file);
     }
     
-    // ✅ FIXED: showOverdueAlert with correct sorting (31,32,33...)
     function showOverdueAlert() {
         let overdueList = [];
         let today = new Date();
@@ -3028,7 +3242,6 @@
                 }
             }
         }
-        // ✅ ASCENDING order: 31 दिन पहले, फिर 32, 33, 34...
         overdueList.sort((a, b) => a.daysOverdue - b.daysOverdue);
         let alertHtml = '';
         if (overdueList.length === 0) { alertHtml = '<div style="text-align:center; padding:20px; color:green;">✅ कोई बकाया अलर्ट नहीं!</div>'; }
@@ -3099,7 +3312,6 @@
     
     function refreshUI() {
         requestAnimationFrame(() => {
-            // ✅ Day loans recalculation
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
@@ -3187,6 +3399,102 @@
         });
     }
     
+    // ============================================
+    // CHANGE #3: OFFLINE TO ONLINE AUTO SYNC
+    // ============================================
+    async function performAutoSync() {
+        if (!navigator.onLine) {
+            console.log("Still offline, skipping sync");
+            return;
+        }
+        if (!currentUser) {
+            console.log("No user logged in, skipping sync");
+            return;
+        }
+        if (!supabaseClient) {
+            console.log("Supabase not initialized");
+            return;
+        }
+        if (syncAfterOnlineDone) {
+            console.log("Auto-sync already done");
+            return;
+        }
+        
+        syncAfterOnlineDone = true;
+        updateSyncStatus('pending', '🔄 ऑटो-सिन्क...');
+        
+        try {
+            console.log("🔄 Starting auto-sync from Supabase...");
+            const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
+            
+            let queryUsers = supabaseClient.from('users').select('*');
+            let queryLoans = supabaseClient.from('loans').select('*');
+            let queryLedger = supabaseClient.from('ledger').select('*');
+            let queryFines = supabaseClient.from('fines').select('*');
+            let queryOfficers = supabaseClient.from('officers').select('*');
+            
+            if (officerId && currentUser.role !== 'admin') {
+                queryUsers = queryUsers.eq('officer_id', officerId);
+                queryLoans = queryLoans.eq('officer_id', officerId);
+                queryLedger = queryLedger.eq('officer_id', officerId);
+                queryFines = queryFines.eq('officer_id', officerId);
+            }
+            
+            const [usersData, loansData, ledgerData, finesData, officersData] = await Promise.all([
+                queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
+            ]);
+            
+            if (usersData.data && usersData.data.length > 0) {
+                usersData.data.forEach(u => { users[u.id] = u; });
+            }
+            if (loansData.data && loansData.data.length > 0) {
+                loansData.data.forEach(l => { loans[l.id] = l; });
+                console.log(`✅ Auto-sync: ${loansData.data.length} loans loaded`);
+            }
+            if (ledgerData.data && ledgerData.data.length > 0) {
+                ledgerData.data.forEach(l => { ledger[l.id] = l; });
+            }
+            if (finesData.data && finesData.data.length > 0) {
+                finesData.data.forEach(f => { fines[f.id] = f; });
+            }
+            if (officersData.data && officersData.data.length > 0) {
+                officersData.data.forEach(o => { officers[o.id] = o; });
+            }
+            
+            await saveDataToLocal();
+            refreshUI();
+            updateSyncStatus('synced', '✅ सिन्क');
+            console.log("✅ Auto-sync completed!");
+            setTimeout(() => { syncAfterOnlineDone = false; }, 5000);
+        } catch(err) {
+            console.error("Auto-sync error:", err);
+            updateSyncStatus('error', '❌ सिन्क');
+            syncAfterOnlineDone = false;
+        }
+    }
+    
+    window.updateOnlineStatus = function() {
+        const indicator = document.getElementById('offlineIndicator');
+        if (navigator.onLine) {
+            indicator.textContent = '✅ Online - Syncing...';
+            indicator.classList.add('online');
+            indicator.style.display = 'block';
+            
+            console.log("🟢 Online ho gaya! Auto-sync starting...");
+            performAutoSync();
+            
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 4000);
+        } else {
+            indicator.textContent = '📡 Offline Mode (Data saved locally)';
+            indicator.classList.remove('online');
+            indicator.style.display = 'block';
+            syncAfterOnlineDone = false;
+            console.log("🔴 Offline mode - data local mein save hoga");
+        }
+    };
+    
     async function loadData() {
         initSupabase();
         try {
@@ -3254,23 +3562,6 @@
         document.getElementById('dashboard').style.display = 'none';
         currentUser = null;
     }
-    
-    window.updateOnlineStatus = function() {
-        const indicator = document.getElementById('offlineIndicator');
-        if (navigator.onLine) {
-            indicator.textContent = '✅ Online';
-            indicator.classList.add('online');
-            indicator.style.display = 'block';
-            setTimeout(() => { indicator.style.display = 'none'; }, 3000);
-            if (currentUser && supabaseClient) { 
-                syncFromSupabase().catch(err => console.error("Sync error:", err));
-            }
-        } else {
-            indicator.textContent = '📡 Offline Mode';
-            indicator.classList.remove('online');
-            indicator.style.display = 'block';
-        }
-    };
     
     document.addEventListener('DOMContentLoaded', function() {
         setupSearch();
