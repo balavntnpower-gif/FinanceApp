@@ -235,7 +235,6 @@
         .receipt-slip .r-footer { font-size:9px; text-align:center; margin-top:4px; color:#555; }
         .receipt-slip .r-paid-stamp { border:2px solid #27ae60; color:#27ae60; font-weight:bold; text-align:center; padding:3px; font-size:13px; letter-spacing:3px; margin:6px 0; }
         
-        /* ✅ ORIGINAL PRINT CSS - BILKUL WAISA KA WAISA */
         @media print {
             @page { size: A4; margin: 8mm; }
             body * { visibility: hidden; }
@@ -766,7 +765,6 @@
             font-weight: bold;
         }
         
-        /* Bulk Preview Table Fix */
         #bulkPreview table {
             display: table !important;
             width: 100% !important;
@@ -1110,18 +1108,7 @@
             currentSelectedUserId = null;
             
             if (supabaseClient && currentUser) {
-                let { data: loansData } = await supabaseClient.from('loans').select('*');
-                let { data: ledgerData } = await supabaseClient.from('ledger').select('*');
-                let { data: usersData } = await supabaseClient.from('users').select('*');
-                let { data: officersData } = await supabaseClient.from('officers').select('*');
-                let { data: finesData } = await supabaseClient.from('fines').select('*');
-                
-                if (loansData) loansData.forEach(l => { loans[l.id] = l; });
-                if (ledgerData) ledgerData.forEach(l => { ledger[l.id] = l; });
-                if (usersData) usersData.forEach(u => { users[u.id] = u; });
-                if (officersData) officersData.forEach(o => { officers[o.id] = o; });
-                if (finesData) finesData.forEach(f => { fines[f.id] = f; });
-                
+                await syncFromSupabase(true);
                 await saveDataToLocal();
                 alert("✅ FORCE SYNC COMPLETE!\n\nसारा डेटा Supabase से रीलोड हो गया।\nअब Mobile और Laptop का data same होगा।");
             } else {
@@ -1172,6 +1159,7 @@
         } catch(err) { return false; }
     }
     
+    // ✅ FIXED: Complete sync from Supabase - REPLACES local data with cloud data
     async function syncFromSupabase(forceRefresh = false) {
         if (!supabaseClient || !currentUser) {
             console.log("No supabase client or user, skipping sync");
@@ -1183,11 +1171,11 @@
         try {
             const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
             
-            let queryUsers = supabaseClient.from('users').select('*');
-            let queryLoans = supabaseClient.from('loans').select('*');
-            let queryLedger = supabaseClient.from('ledger').select('*');
-            let queryFines = supabaseClient.from('fines').select('*');
-            let queryOfficers = supabaseClient.from('officers').select('*');
+            let queryUsers = supabaseClient.from('users').select('*').limit(100000);
+            let queryLoans = supabaseClient.from('loans').select('*').limit(100000);
+            let queryLedger = supabaseClient.from('ledger').select('*').limit(100000);
+            let queryFines = supabaseClient.from('fines').select('*').limit(100000);
+            let queryOfficers = supabaseClient.from('officers').select('*').limit(100000);
             
             if (officerId && currentUser.role !== 'admin') {
                 queryUsers = queryUsers.eq('officer_id', officerId);
@@ -1196,59 +1184,55 @@
                 queryFines = queryFines.eq('officer_id', officerId);
             }
             
-            const [usersData, loansData, ledgerData, finesData, officersData] = await Promise.all([
+            const [usersRes, loansRes, ledgerRes, finesRes, officersRes] = await Promise.all([
                 queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
             ]);
             
-            let newUsers = {};
-            let newLoans = {};
-            let newLedger = {};
-            let newFines = {};
-            let newOfficers = {};
+            // ✅ CRITICAL FIX: Create fresh objects instead of merging
+            const newUsers = {};
+            const newLoans = {};
+            const newLedger = {};
+            const newFines = {};
+            const newOfficers = {};
             
-            if (usersData.error) {
-                console.error("Users fetch error:", usersData.error);
-            } else if (usersData.data && usersData.data.length > 0) {
-                usersData.data.forEach(u => { newUsers[u.id] = u; });
+            if (usersRes.data && usersRes.data.length > 0) {
+                usersRes.data.forEach(u => { newUsers[u.id] = u; });
+                console.log(`✅ Loaded ${usersRes.data.length} users from Supabase`);
             }
             
-            if (loansData.error) {
-                console.error("Loans fetch error:", loansData.error);
-            } else if (loansData.data && loansData.data.length > 0) {
-                loansData.data.forEach(l => { newLoans[l.id] = l; });
-                console.log(`✅ Loaded ${loansData.data.length} loans from Supabase`);
-                console.log("Monthly loans in Supabase:", loansData.data.filter(l => l.type === 'month').length);
+            if (loansRes.data && loansRes.data.length > 0) {
+                loansRes.data.forEach(l => { newLoans[l.id] = l; });
+                console.log(`✅ Loaded ${loansRes.data.length} loans from Supabase`);
             }
             
-            if (ledgerData.error) {
-                console.error("Ledger fetch error:", ledgerData.error);
-            } else if (ledgerData.data && ledgerData.data.length > 0) {
-                ledgerData.data.forEach(l => { newLedger[l.id] = l; });
-                console.log(`✅ Loaded ${ledgerData.data.length} ledger entries from Supabase`);
+            if (ledgerRes.data && ledgerRes.data.length > 0) {
+                ledgerRes.data.forEach(e => { newLedger[e.id] = e; });
+                console.log(`✅ Loaded ${ledgerRes.data.length} ledger entries from Supabase`);
             }
             
-            if (finesData.error) {
-                console.error("Fines fetch error:", finesData.error);
-            } else if (finesData.data && finesData.data.length > 0) {
-                finesData.data.forEach(f => { newFines[f.id] = f; });
+            if (finesRes.data && finesRes.data.length > 0) {
+                finesRes.data.forEach(f => { newFines[f.id] = f; });
+                console.log(`✅ Loaded ${finesRes.data.length} fines from Supabase`);
             }
             
-            if (officersData.error) {
-                console.error("Officers fetch error:", officersData.error);
-            } else if (officersData.data && officersData.data.length > 0) {
-                officersData.data.forEach(o => { newOfficers[o.id] = o; });
+            if (officersRes.data && officersRes.data.length > 0) {
+                officersRes.data.forEach(o => { newOfficers[o.id] = o; });
+                console.log(`✅ Loaded ${officersRes.data.length} officers from Supabase`);
             }
             
-            users = {...users, ...newUsers};
-            loans = {...loans, ...newLoans};
-            ledger = {...ledger, ...newLedger};
-            fines = {...fines, ...newFines};
-            officers = {...officers, ...newOfficers};
+            // ✅ REPLACE local data with cloud data (NOT merge)
+            users = newUsers;
+            loans = newLoans;
+            ledger = newLedger;
+            fines = newFines;
+            officers = newOfficers;
             
-            console.log(`📊 After sync - Total loans: ${Object.keys(loans).length}, Monthly: ${Object.values(loans).filter(l => l.type === 'month').length}`);
+            console.log(`📊 After sync - Total loans: ${Object.keys(loans).length}, Ledger: ${Object.keys(ledger).length}`);
             
+            // Update monthly interest calculations
             checkMonthlyInterest();
             
+            // Fix day loan remaining amounts
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
@@ -1525,6 +1509,7 @@
         }
     }
     
+    // ✅ FIXED: checkLogin with proper sync
     async function checkLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
@@ -1534,7 +1519,9 @@
             saveSession(currentUser);
             showDashboard();
             updateExpiryBadge(null);
-            if (supabaseClient) await syncFromSupabase();
+            if (supabaseClient) {
+                await syncFromSupabase(true);
+            }
             return;
         }
         
@@ -1553,7 +1540,9 @@
                     saveSession(currentUser);
                     showDashboard();
                     updateExpiryBadge(officer.expiry);
-                    if (supabaseClient) await syncFromSupabase();
+                    if (supabaseClient) {
+                        await syncFromSupabase(true);
+                    }
                     return;
                 } else { 
                     document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; 
@@ -1573,7 +1562,9 @@
         saveSession(currentUser);
         showDashboard();
         updateExpiryBadge(user.expiry);
-        if (supabaseClient) await syncFromSupabase();
+        if (supabaseClient) {
+            await syncFromSupabase(true);
+        }
     }
     
     function showDashboard() {
@@ -1855,7 +1846,7 @@
                             <button class="backup-officer small" onclick="downloadOfficerBackup('${id}')">📥 JSON</button>
                             <button class="delete-officer small" onclick="deleteOfficer('${id}','${off.name}')">🗑️</button>
                         <\/td>
-                       </tr>`;
+                    </tr>`;
         }
         html += '</tbody></table>';
         div.innerHTML = html;
@@ -2081,7 +2072,6 @@
         document.addEventListener('click', (e) => { if (!inp.contains(e.target) && !sug.contains(e.target)) sug.style.display = 'none'; });
     }
     
-    // ✅ selectCustomer with Total Baki Box - एक Line Layout + DATE BOLD (Change 4)
     function selectCustomer(userId, userName) {
         document.getElementById('searchInput').value = userName;
         document.getElementById('searchSuggestions').style.display = 'none';
@@ -2126,8 +2116,6 @@
                 if (loan.created_from_principal && loan.previous_loan_id) { oldLoanInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || `🔁 यह लोन पुराने लोन #${loan.previous_loan_id} से मूलधन जमा करके बनाया गया है।`}</div>`; }
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || `🔒 यह लोन मूलधन जमा करके बंद किया गया।`}</div>`; }
-                // ✅ CHANGE 4: DATE BOLD (loan.start_date inside strong tag)
-                // ✅ ALL 9 BUTTONS - NO CONDITIONS
                 html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')} | ब्याज दर: ${loan.interest_rate}%</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button><button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button><button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button><button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
             }
         }
@@ -2143,9 +2131,6 @@
         }
     }
     
-    // ============================================
-    // CHANGE 1: ग्राहक एडिट FUNCTIONS
-    // ============================================
     function editCustomer(userId) {
         const user = users[userId];
         if (!user) {
@@ -2368,9 +2353,6 @@
         }
     }
     
-    // ============================================
-    // ✅ FIXED: PRINCIPAL PAYMENT OPTION - ADMIN KE LIYE BHI DIKHEGA
-    // ============================================
     function openPaymentModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
@@ -2698,7 +2680,7 @@
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th><tr></thead><tbody>${rows || '<td><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody>}</div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody>}</div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
@@ -2743,9 +2725,6 @@
     
     function closeBulkPaymentModal() { document.getElementById('bulkPaymentModal').style.display = 'none'; bulkParsedRows = []; }
     
-    // ============================================
-    // CHANGE 2: IMPROVED DATE PARSING FOR BULK PAYMENT
-    // ============================================
     function parseAmount(str) {
         if (!str) return 0;
         let cleaned = str.toString().replace(/[₹,\s]/g, '');
@@ -2767,7 +2746,6 @@
         
         let dateStr = '';
         
-        // Pattern: DD Month YYYY (e.g., 30 Apr 2026, 30 April 2026)
         let match1 = input.match(/(\d{1,2})[\/\s\-]+([a-zA-Z]+)[\/\s\-]+(\d{4})/i);
         if (match1) {
             let dd = match1[1].padStart(2, '0');
@@ -2777,7 +2755,6 @@
             dateStr = `${dd}/${mm}/${yyyy}`;
         }
         
-        // Pattern: DD/MM/YYYY or DD-MM-YYYY
         if (!dateStr) {
             let match2 = input.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
             if (match2) {
@@ -2788,7 +2765,6 @@
             }
         }
         
-        // Pattern: DD/MM/YY or DD-MM-YY
         if (!dateStr) {
             let match3 = input.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})/);
             if (match3) {
@@ -2799,7 +2775,6 @@
             }
         }
         
-        // Pattern: DD/MM (current year)
         if (!dateStr) {
             let match4 = input.match(/(\d{1,2})[\/\-](\d{1,2})/);
             if (match4) {
@@ -3326,14 +3301,11 @@
         }
     }
     
-    // ============================================
-    // CHANGE 3: OFFLINE TO ONLINE AUTO SYNC
-    // ============================================
     async function performAutoSync() {
         if (!navigator.onLine || !currentUser || !supabaseClient || syncAfterOnlineDone) return;
         syncAfterOnlineDone = true;
         updateSyncStatus('pending', '🔄 ऑटो-सिन्क...');
-        await syncFromSupabase();
+        await syncFromSupabase(true);
         updateSyncStatus('synced', '✅ सिन्क');
         setTimeout(() => { syncAfterOnlineDone = false; }, 5000);
     }
@@ -3498,7 +3470,7 @@
                 else updateExpiryBadge(null);
                 setTimeout(() => { checkAndShowReminder(); }, 5000);
                 if (supabaseClient) {
-                    await syncFromSupabase();
+                    await syncFromSupabase(true);
                     checkMonthlyInterest();
                     refreshUI();
                 }
@@ -3525,7 +3497,8 @@
         window.updateOnlineStatus();
         loadData();
         setInterval(() => { if (currentUser) refreshUI(); }, 30000);
-        setInterval(() => { if (navigator.onLine && currentUser && supabaseClient) { syncFromSupabase().catch(err => console.error(err)); } }, 5 * 60 * 1000);
+        // ✅ Auto-sync every 30 seconds
+        setInterval(() => { if (navigator.onLine && currentUser && supabaseClient) { syncFromSupabase(false).catch(err => console.error(err)); } }, 30000);
     });
 </script>
 </body>
