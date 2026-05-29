@@ -645,7 +645,6 @@
     let editingCustomerId = null;
     let saveTimeout = null;
     let _lastMonthlyCheck = 0;
-    let _syncingNow = false;
     
     const GITHUB_USERS_URL = "users.json";
     const DB_NAME = 'HLBFinanceDB';
@@ -769,6 +768,7 @@
         }
     }
     
+    // ========== FINAL WORKING saveData FUNCTION - NO FLAGS ==========
     async function saveData() {
         if (saveTimeout) clearTimeout(saveTimeout);
         
@@ -778,26 +778,35 @@
                 await saveDataToLocal();
                 console.log("✅ IndexedDB save complete");
                 
-                if (navigator.onLine && currentUser && supabaseClient && !_syncingNow) {
+                if (navigator.onLine && currentUser && supabaseClient) {
                     console.log("☁️ Syncing to Supabase...");
                     updateSyncStatus('pending', '🔄 सिन्क...');
-                    _syncingNow = true;
                     
                     let synced = 0;
-                    for (let [id, entry] of Object.entries(ledger)) {
+                    let failed = 0;
+                    const entries = Object.entries(ledger);
+                    console.log(`📊 Total ledger entries to sync: ${entries.length}`);
+                    
+                    for (let [id, entry] of entries) {
                         const { error } = await supabaseClient.from('ledger').upsert(entry);
-                        if (!error) synced++;
+                        if (error) {
+                            console.error(`❌ Failed ${id}:`, error.message);
+                            failed++;
+                        } else {
+                            synced++;
+                        }
                     }
                     
-                    console.log(`✅ Synced ${synced} ledger entries`);
+                    console.log(`✅ LEDGER SYNC: ${synced} synced, ${failed} failed`);
                     updateSyncStatus('synced', '✅ सिन्क');
-                    if (synced > 0) showToast(`✅ ${synced} entries synced`, 1500);
-                    _syncingNow = false;
+                    
+                    if (synced > 0) {
+                        showToast(`✅ ${synced} entries synced to cloud`, 1500);
+                    }
                 }
             } catch (err) {
                 console.error("❌ SaveData error:", err);
                 updateSyncStatus('error', '❌ सेव नहीं');
-                _syncingNow = false;
             }
             saveTimeout = null;
         }, 500);
@@ -1395,7 +1404,6 @@
         alert('✅ ऑफिसर का बैकअप डाउनलोड हो गया!');
     }
     
-    // ========== DELETE OFFICER - FIXED (Supabase से भी delete) ==========
     async function deleteOfficer(officerId, officerName) {
         if (!confirm(`क्या आप "${officerName}" को डिलीट करना चाहते हैं?\n\nइस ऑफिसर के सभी ग्राहक, लोन, कलेक्शन भी डिलीट हो जाएंगे!`)) return;
         
@@ -1407,7 +1415,6 @@
                 }
             }
             
-            // Delete from Supabase first
             if (supabaseClient && navigator.onLine) {
                 for (let [ledgerId, entry] of Object.entries(ledger)) {
                     if (customerIds.includes(entry.user_id)) {
@@ -1430,7 +1437,6 @@
                 await supabaseClient.from('officers').delete().eq('id', officerId);
             }
             
-            // Delete from local
             for (let userId of customerIds) {
                 for (let [loanId, loan] of Object.entries(loans)) if (loan.user_id === userId) delete loans[loanId];
                 for (let [ledgerId, entry] of Object.entries(ledger)) if (entry.user_id === userId) delete ledger[ledgerId];
@@ -1763,7 +1769,6 @@
         showToast(`✅ नया ग्राहक "${name}" बन गया!`, 2000);
     }
     
-    // ========== DELETE CUSTOMER - FIXED (Supabase से भी delete) ==========
     async function deleteCustomer(userId, userName) {
         if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
             return;
@@ -1777,7 +1782,6 @@
                 }
             }
             
-            // Delete from Supabase first
             if (supabaseClient && navigator.onLine) {
                 for (let [ledgerId, entry] of Object.entries(ledger)) {
                     if (entry.user_id === userId) {
@@ -1799,7 +1803,6 @@
                 console.log(`🗑️ Deleted user ${userId} from Supabase`);
             }
             
-            // Delete from local
             for (let [ledgerId, entry] of Object.entries(ledger)) {
                 if (entry.user_id === userId) delete ledger[ledgerId];
             }
@@ -2115,10 +2118,10 @@
         ${loan.total_discount ? `<span>🏷️ छूट: ₹${loan.total_discount.toLocaleString('en-IN')}</span>` : ''}
         <span>📊 कुल: ₹${loan.total_amount.toLocaleString('en-IN')}</span><span>💵 जमा: ₹${totalPaid.toLocaleString('en-IN')}</span>
         <span><strong>📌 बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></span></div>${remarkHtml}
-        <div class="section-title">▶ कलेक्शन (पेमेंट)</div><div class="two-columns"><div class="payment-column"></table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
+        <div class="section-title">▶ कलेक्शन (पेमेंट)</div><div class="two-columns"><div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
         ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col1.length === 0 ? '<tr><td colspan="4">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
-        <div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
+        <div class="payment-column"><tr><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
         ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4">-<\/td><\/tr>' : ''}</tbody></table></div></div>
         <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div></div>
@@ -2436,7 +2439,6 @@
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
-    // ========== DELETE PAYMENT - FIXED (Supabase से भी delete) ==========
     async function deletePayment() {
         const ledgerId = document.getElementById('editPaymentId').value;
         const entry = ledger[ledgerId];
@@ -2445,17 +2447,11 @@
         if (!confirm('क्या आप इस पेमेंट को पूरी तरह डिलीट करना चाहते हैं?')) return;
         
         try {
-            // Delete from Supabase first
             if (supabaseClient && navigator.onLine) {
-                const { error } = await supabaseClient.from('ledger').delete().eq('id', ledgerId);
-                if (error) {
-                    console.error("Supabase delete error:", error);
-                } else {
-                    console.log(`🗑️ Deleted payment ${ledgerId} from Supabase`);
-                }
+                await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+                console.log(`🗑️ Deleted payment ${ledgerId} from Supabase`);
             }
             
-            // Update loan balance if needed
             if (entry.loan_id && loans[entry.loan_id]) {
                 const loan = loans[entry.loan_id];
                 loan.remaining_amount += entry.amount_paid;
@@ -2463,18 +2459,14 @@
                     loan.total_discount -= entry.discount;
                     loan.total_amount += entry.discount;
                 }
-                if (loan.remaining_amount > 0) {
-                    loan.status = 'active';
-                }
+                if (loan.remaining_amount > 0) loan.status = 'active';
                 loans[entry.loan_id] = loan;
                 
-                // Update loan in Supabase
                 if (supabaseClient && navigator.onLine) {
                     await supabaseClient.from('loans').upsert(loan);
                 }
             }
             
-            // Delete from local
             delete ledger[ledgerId];
             
             await saveDataToLocal();
@@ -2573,7 +2565,6 @@
     
     function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
     
-    // ========== DELETE LOAN - FIXED (Supabase से भी delete) ==========
     async function openDeleteLoanModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
@@ -2581,25 +2572,20 @@
         if (!confirm(`क्या आप "${loan.user_name}" का लोन पूरी तरह डिलीट करना चाहते हैं?\n\nसभी पेमेंट्स भी डिलीट हो जाएंगे!`)) return;
         
         try {
-            // Delete from Supabase first
             if (supabaseClient && navigator.onLine) {
                 for (let [ledgerId, entry] of Object.entries(ledger)) {
                     if (entry.loan_id === loanId) {
                         await supabaseClient.from('ledger').delete().eq('id', ledgerId);
-                        console.log(`🗑️ Deleted ledger ${ledgerId} from Supabase`);
                     }
                 }
                 for (let [fineId, fine] of Object.entries(fines)) {
                     if (fine.loan_id === loanId) {
                         await supabaseClient.from('fines').delete().eq('id', fineId);
-                        console.log(`🗑️ Deleted fine ${fineId} from Supabase`);
                     }
                 }
                 await supabaseClient.from('loans').delete().eq('id', loanId);
-                console.log(`🗑️ Deleted loan ${loanId} from Supabase`);
             }
             
-            // Delete from local
             for (let [ledgerId, entry] of Object.entries(ledger)) {
                 if (entry.loan_id === loanId) delete ledger[ledgerId];
             }
