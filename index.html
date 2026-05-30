@@ -769,72 +769,71 @@
         }
     }
     
-    // ========== SUPABASE SYNC (APK WebView safe) ==========
-    async function syncToSupabase() {
-        if (!navigator.onLine || !currentUser || !supabaseClient || _syncingNow) return;
-        console.log("☁️ Syncing to Supabase...");
-        updateSyncStatus('pending', '🔄 सिन्क...');
-        _syncingNow = true;
-        try {
-            const allUsers = Object.values(users);
-            const allLoans = Object.values(loans);
-            const allLedger = Object.values(ledger);
-            const allFines = Object.values(fines);
-            if (allUsers.length > 0) {
-                const { error } = await supabaseClient.from('users').upsert(allUsers);
-                if (error) console.error("❌ Users sync:", error.message);
-                else console.log("✅ Users synced:", allUsers.length);
-            }
-            if (allLoans.length > 0) {
-                const { error } = await supabaseClient.from('loans').upsert(allLoans);
-                if (error) console.error("❌ Loans sync:", error.message);
-                else console.log("✅ Loans synced:", allLoans.length);
-            }
-            if (allLedger.length > 0) {
-                const { error } = await supabaseClient.from('ledger').upsert(allLedger);
-                if (error) console.error("❌ Ledger sync:", error.message);
-                else console.log("✅ Ledger synced:", allLedger.length);
-            }
-            if (allFines.length > 0) {
-                const { error } = await supabaseClient.from('fines').upsert(allFines);
-                if (error) console.error("❌ Fines sync:", error.message);
-                else console.log("✅ Fines synced:", allFines.length);
-            }
-            updateSyncStatus('synced', '✅ सिन्क');
-        } catch(syncErr) {
-            console.error("❌ Supabase sync error:", syncErr);
-            updateSyncStatus('error', '❌ सिन्क नहीं');
-        }
-        _syncingNow = false;
-    }
-
-    async function _doSaveAndSync() {
-        try {
-            console.log("💾 Saving to IndexedDB...");
-            await saveDataToLocal();
-            console.log("✅ IndexedDB save complete");
-            await syncToSupabase();
-        } catch (err) {
-            console.error("❌ SaveData error:", err);
-            updateSyncStatus('error', '❌ सेव नहीं');
-            _syncingNow = false;
-        }
-        saveTimeout = null;
-    }
-
     async function saveData() {
         if (saveTimeout) clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(function() { _doSaveAndSync(); }, 300);
+        
+        saveTimeout = setTimeout(async () => {
+            try {
+                console.log("💾 Saving to IndexedDB...");
+                await saveDataToLocal();
+                console.log("✅ IndexedDB save complete");
+                
+                if (navigator.onLine && currentUser && supabaseClient && !_syncingNow) {
+                    console.log("☁️ Syncing to Supabase...");
+                    updateSyncStatus('pending', '🔄 सिन्क...');
+                    _syncingNow = true;
+                    
+                    try {
+                        // Sync all tables to Supabase
+                        const allUsers = Object.values(users);
+                        const allLoans = Object.values(loans);
+                        const allLedger = Object.values(ledger);
+                        const allFines = Object.values(fines);
+                        
+                        if (allUsers.length > 0) {
+                            const { error } = await supabaseClient.from('users').upsert(allUsers);
+                            if (error) console.error("❌ Users sync error:", error);
+                            else console.log(`✅ Synced ${allUsers.length} users`);
+                        }
+                        if (allLoans.length > 0) {
+                            const { error } = await supabaseClient.from('loans').upsert(allLoans);
+                            if (error) console.error("❌ Loans sync error:", error);
+                            else console.log(`✅ Synced ${allLoans.length} loans`);
+                        }
+                        if (allLedger.length > 0) {
+                            const { error } = await supabaseClient.from('ledger').upsert(allLedger);
+                            if (error) console.error("❌ Ledger sync error:", error);
+                            else console.log(`✅ Synced ${allLedger.length} ledger entries`);
+                        }
+                        if (allFines.length > 0) {
+                            const { error } = await supabaseClient.from('fines').upsert(allFines);
+                            if (error) console.error("❌ Fines sync error:", error);
+                            else console.log(`✅ Synced ${allFines.length} fines`);
+                        }
+                        
+                        updateSyncStatus('synced', '✅ सिन्क');
+                    } catch(syncErr) {
+                        console.error("❌ Supabase sync error:", syncErr);
+                        updateSyncStatus('error', '❌ सिन्क नहीं');
+                    }
+                    _syncingNow = false;
+                }
+            } catch (err) {
+                console.error("❌ SaveData error:", err);
+                updateSyncStatus('error', '❌ सेव नहीं');
+                _syncingNow = false;
+            }
+            saveTimeout = null;
+        }, 500);
     }
     
     // ========== SUPABASE FUNCTIONS ==========
     function initSupabase() {
         if (typeof supabase === 'undefined') {
-            console.log("⏳ Waiting for Supabase CDN...");
-        setTimeout(initSupabase, 800);
+            setTimeout(initSupabase, 500);
             return;
         }
-        try { supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } }); } catch(e) { setTimeout(initSupabase, 1000); return; }
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         console.log("✅ Supabase client initialized!");
         testSupabaseConnection();
     }
@@ -1555,7 +1554,6 @@
         document.getElementById('collectionLoanSelect').innerHTML = '<option value="">पहले ग्राहक चुनें</option>';
         document.getElementById('collectionAmount').value = '';
         showToast("✅ कलेक्शन जुड़ गया!", 2000);
-        setTimeout(function() { syncToSupabase(); }, 1000);
     }
     
     function selectCollectionCustomer(name) {
@@ -1955,9 +1953,7 @@
                 createNewLoanFromPrincipal(loan, newPrincipal, paymentDate, amount);
                 showToast(`✅ मूलधन जमा! नया लोन बना: ₹${newPrincipal.toLocaleString('en-IN')}`, 3000);
             } else { showToast(`✅ मूलधन जमा! लोन पूर्ण हुआ।`, 3000); }
-            saveData(); refreshUI(); closePaymentModal();
-            setTimeout(function() { syncToSupabase(); }, 1000);
-            return;
+            saveData(); refreshUI(); closePaymentModal(); return;
         }
         
         if (discount > 0) {
@@ -1977,8 +1973,6 @@
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: paymentDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: discount };
         saveData(); refreshUI(); closePaymentModal();
         showToast(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${paymentDate})`, 2000);
-        // APK: immediate sync after payment
-        setTimeout(function() { syncToSupabase(); }, 1000);
     }
     
     function openDiscountModal(loanId) {
@@ -3082,21 +3076,11 @@
         loadData();
         
         setInterval(() => { if (currentUser) refreshUI(); }, 30000);
-        setInterval(function() { 
+        setInterval(() => { 
             if (navigator.onLine && currentUser && supabaseClient) { 
-                syncFromSupabase().catch(err => console.error(err));
-                // Also push local data to Supabase (APK safety net)
-                syncToSupabase().catch(err => console.error(err));
+                syncFromSupabase().catch(err => console.error(err)); 
             } 
         }, 5 * 60 * 1000);
-        
-        // APK: Sync on app resume/focus
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && currentUser && navigator.onLine && supabaseClient) {
-                console.log("📱 App resumed - syncing...");
-                syncToSupabase().catch(err => console.error(err));
-            }
-        });
     });
 </script>
 </body>
