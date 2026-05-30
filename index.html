@@ -589,7 +589,7 @@
             <strong>Format:</strong> Amount (left column) &nbsp;|&nbsp; Date+Time (right column)<br>
             <span style="color:#888;">₹ symbol और comma अपने आप हट जाएंगे</span>
         </div>
-        <textarea id="bulkPasteArea" rows="8" style="width:100%; font-family:monospace; font-size:12px; border:2px dashed #27ae60; border-radius:6px; padding:8px; resize:vertical;" placeholder="यहाँ Excel से paste करें...&#10;500	01/04/2026&#10;₹1,000	02/04/2026 10:30&#10;1500	03/04/2026"></textarea>
+        <textarea id="bulkPasteArea" rows="8" style="width:100%; font-family:monospace; font-size:12px; border:2px dashed #27ae60; border-radius:6px; padding:8px; resize:vertical;" placeholder="Excel से Ctrl+C करके यहाँ Ctrl+V करें&#10;&#10;सभी formats चलेंगे:&#10;₹ 400&#9;03 May 2026, 04:55 pm&#10;₹ 400&#9;10-05-2026&#10;400&#9;2026-05-11&#10;400&#9;11/05/2026"></textarea>
         <div id="bulkPreview" style="margin-top:8px; max-height:200px; overflow-y:auto;"></div>
         <div style="display:flex; gap:6px; margin-top:10px;">
             <button onclick="parseBulkPayment()" style="flex:1; background:#3498db;">👁️ Preview देखें</button>
@@ -649,6 +649,8 @@
     let saveTimeout = null;
     let _lastMonthlyCheck = 0;
     let _syncingNow = false;
+    // Changed records tracker — sirf naye/badle records Supabase par jayenge
+    let _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
     
     const GITHUB_USERS_URL = "users.json";
     const DB_NAME = 'HLBFinanceDB';
@@ -772,7 +774,11 @@
         }
     }
     
-    async function saveData() {
+    async function saveData(changedTable, changedId) {
+        // Changed record track karo
+        if (changedTable && changedId) {
+            if (_pendingChanges[changedTable]) _pendingChanges[changedTable].add(changedId);
+        }
         if (saveTimeout) clearTimeout(saveTimeout);
         
         saveTimeout = setTimeout(async () => {
@@ -782,44 +788,49 @@
                 console.log("✅ IndexedDB save complete");
                 
                 if (navigator.onLine && currentUser && supabaseClient && !_syncingNow) {
-                    console.log("☁️ Syncing to Supabase...");
+                    console.log("☁️ Syncing changed records to Supabase...");
                     updateSyncStatus('pending', '🔄 सिन्क...');
                     _syncingNow = true;
                     
                     try {
-                        // Sync all tables to Supabase
-                        const allUsers = Object.values(users);
-                        const allLoans = Object.values(loans);
-                        const allLedger = Object.values(ledger);
-                        const allFines = Object.values(fines);
+                        // Sirf changed records push karo
+                        const toSync = {
+                            users:  [..._pendingChanges.users].map(id => users[id]).filter(Boolean),
+                            loans:  [..._pendingChanges.loans].map(id => loans[id]).filter(Boolean),
+                            ledger: [..._pendingChanges.ledger].map(id => ledger[id]).filter(Boolean),
+                            fines:  [..._pendingChanges.fines].map(id => fines[id]).filter(Boolean),
+                        };
                         
-                        if (allUsers.length > 0) {
-                            const { error } = await supabaseClient.from('users').upsert(allUsers);
-                            if (error) console.error("❌ Users sync error:", error);
-                            else console.log(`✅ Synced ${allUsers.length} users`);
+                        let anyError = false;
+                        
+                        if (toSync.users.length > 0) {
+                            const { error } = await supabaseClient.from('users').upsert(toSync.users);
+                            if (error) { console.error("❌ Users sync error:", error); anyError = true; }
+                            else { _pendingChanges.users.clear(); console.log(`✅ Synced ${toSync.users.length} users`); }
                         }
-                        if (allLoans.length > 0) {
-                            const { error } = await supabaseClient.from('loans').upsert(allLoans);
-                            if (error) console.error("❌ Loans sync error:", error);
-                            else console.log(`✅ Synced ${allLoans.length} loans`);
+                        if (toSync.loans.length > 0) {
+                            const { error } = await supabaseClient.from('loans').upsert(toSync.loans);
+                            if (error) { console.error("❌ Loans sync error:", error); anyError = true; }
+                            else { _pendingChanges.loans.clear(); console.log(`✅ Synced ${toSync.loans.length} loans`); }
                         }
-                        if (allLedger.length > 0) {
-                            const { error } = await supabaseClient.from('ledger').upsert(allLedger);
-                            if (error) console.error("❌ Ledger sync error:", error);
-                            else console.log(`✅ Synced ${allLedger.length} ledger entries`);
+                        if (toSync.ledger.length > 0) {
+                            const { error } = await supabaseClient.from('ledger').upsert(toSync.ledger);
+                            if (error) { console.error("❌ Ledger sync error:", error); anyError = true; }
+                            else { _pendingChanges.ledger.clear(); console.log(`✅ Synced ${toSync.ledger.length} ledger entries`); }
                         }
-                        if (allFines.length > 0) {
-                            const { error } = await supabaseClient.from('fines').upsert(allFines);
-                            if (error) console.error("❌ Fines sync error:", error);
-                            else console.log(`✅ Synced ${allFines.length} fines`);
+                        if (toSync.fines.length > 0) {
+                            const { error } = await supabaseClient.from('fines').upsert(toSync.fines);
+                            if (error) { console.error("❌ Fines sync error:", error); anyError = true; }
+                            else { _pendingChanges.fines.clear(); console.log(`✅ Synced ${toSync.fines.length} fines`); }
                         }
                         
-                        updateSyncStatus('synced', '✅ सिन्क');
+                        updateSyncStatus(anyError ? 'error' : 'synced', anyError ? '⚠️ Partial' : '✅ सिन्क');
                     } catch(syncErr) {
                         console.error("❌ Supabase sync error:", syncErr);
                         updateSyncStatus('error', '❌ सिन्क नहीं');
+                    } finally {
+                        _syncingNow = false;
                     }
-                    _syncingNow = false;
                 }
             } catch (err) {
                 console.error("❌ SaveData error:", err);
@@ -970,77 +981,55 @@
         }
     }
     
-    // ========== FORCE PUSH: Local → Supabase ==========
+    // ========== FORCE PUSH: Sirf changed/naye records → Supabase ==========
     async function forcePushToSupabase() {
         if (!supabaseClient) { alert('❌ Supabase connect nahi hai!'); return; }
         if (!navigator.onLine) { alert('❌ Internet nahi hai! Online hokar try karein.'); return; }
         if (!currentUser) { alert('❌ Pehle login karein!'); return; }
 
-        const totalRecords = Object.keys(users).length + Object.keys(loans).length + Object.keys(ledger).length + Object.keys(fines).length;
-        if (!confirm(`⬆️ FORCE PUSH\n\nSara local data Supabase par bheja jayega:\n👤 Users: ${Object.keys(users).length}\n📋 Loans: ${Object.keys(loans).length}\n💰 Ledger: ${Object.keys(ledger).length}\n⚠️ Fines: ${Object.keys(fines).length}\n\nTotal: ${totalRecords} records\n\nJari rakhen?`)) return;
+        const pendingUsers = [..._pendingChanges.users].map(id => users[id]).filter(Boolean);
+        const pendingLoans = [..._pendingChanges.loans].map(id => loans[id]).filter(Boolean);
+        const pendingLedger = [..._pendingChanges.ledger].map(id => ledger[id]).filter(Boolean);
+        const pendingFines = [..._pendingChanges.fines].map(id => fines[id]).filter(Boolean);
+        const totalPending = pendingUsers.length + pendingLoans.length + pendingLedger.length + pendingFines.length;
+
+        if (totalPending === 0) {
+            showToast('✅ Sab kuch already sync hai! Koi pending change nahi.', 3000);
+            return;
+        }
+
+        if (!confirm(`⬆️ FORCE PUSH — Sirf pending changes\n\n👤 Users: ${pendingUsers.length}\n📋 Loans: ${pendingLoans.length}\n💰 Ledger: ${pendingLedger.length}\n⚠️ Fines: ${pendingFines.length}\n\nTotal: ${totalPending} records\n\nJari rakhen?`)) return;
 
         updateSyncStatus('pending', '⬆️ Push ho raha...');
         const btn = document.querySelector('.force-push-btn');
         if (btn) { btn.disabled = true; btn.innerText = '⏳ Pushing...'; }
 
         try {
-            let successCount = 0;
-            let errorCount = 0;
+            let successCount = 0, errorCount = 0;
 
-            // Users push
-            const allUsers = Object.values(users);
-            if (allUsers.length > 0) {
+            async function pushChunked(table, records, pendingSet) {
                 const CHUNK = 50;
-                for (let i = 0; i < allUsers.length; i += CHUNK) {
-                    const chunk = allUsers.slice(i, i + CHUNK);
-                    const { error } = await supabaseClient.from('users').upsert(chunk);
-                    if (error) { console.error('Users push error:', error); errorCount++; }
+                let ok = true;
+                for (let i = 0; i < records.length; i += CHUNK) {
+                    const chunk = records.slice(i, i + CHUNK);
+                    const { error } = await supabaseClient.from(table).upsert(chunk);
+                    if (error) { console.error(`${table} push error:`, error); errorCount++; ok = false; }
                     else successCount += chunk.length;
                 }
+                if (ok) pendingSet.clear();
             }
 
-            // Loans push
-            const allLoans = Object.values(loans);
-            if (allLoans.length > 0) {
-                const CHUNK = 50;
-                for (let i = 0; i < allLoans.length; i += CHUNK) {
-                    const chunk = allLoans.slice(i, i + CHUNK);
-                    const { error } = await supabaseClient.from('loans').upsert(chunk);
-                    if (error) { console.error('Loans push error:', error); errorCount++; }
-                    else successCount += chunk.length;
-                }
-            }
-
-            // Ledger push
-            const allLedger = Object.values(ledger);
-            if (allLedger.length > 0) {
-                const CHUNK = 100;
-                for (let i = 0; i < allLedger.length; i += CHUNK) {
-                    const chunk = allLedger.slice(i, i + CHUNK);
-                    const { error } = await supabaseClient.from('ledger').upsert(chunk);
-                    if (error) { console.error('Ledger push error:', error); errorCount++; }
-                    else successCount += chunk.length;
-                }
-            }
-
-            // Fines push
-            const allFines = Object.values(fines);
-            if (allFines.length > 0) {
-                const CHUNK = 50;
-                for (let i = 0; i < allFines.length; i += CHUNK) {
-                    const chunk = allFines.slice(i, i + CHUNK);
-                    const { error } = await supabaseClient.from('fines').upsert(chunk);
-                    if (error) { console.error('Fines push error:', error); errorCount++; }
-                    else successCount += chunk.length;
-                }
-            }
+            if (pendingUsers.length > 0) await pushChunked('users', pendingUsers, _pendingChanges.users);
+            if (pendingLoans.length > 0) await pushChunked('loans', pendingLoans, _pendingChanges.loans);
+            if (pendingLedger.length > 0) await pushChunked('ledger', pendingLedger, _pendingChanges.ledger);
+            if (pendingFines.length > 0) await pushChunked('fines', pendingFines, _pendingChanges.fines);
 
             if (errorCount === 0) {
                 updateSyncStatus('synced', '✅ सिन्क');
                 showToast(`✅ FORCE PUSH COMPLETE! ${successCount} records Supabase par save ho gaye!`, 4000);
             } else {
                 updateSyncStatus('error', '⚠️ Partial');
-                showToast(`⚠️ ${successCount} records gaye, ${errorCount} chunks mein error. Console check karein.`, 5000);
+                showToast(`⚠️ ${successCount} records gaye, ${errorCount} chunks mein error.`, 5000);
             }
 
         } catch (err) {
@@ -1443,12 +1432,13 @@
                 if (Math.abs(loan.remaining_amount - oldRemaining) > 0.01) updatedCount++;
                 if (loan.remaining_amount <= 0) loan.status = 'completed';
                 loans[loanId] = loan;
+                _pendingChanges.loans.add(loanId);
             }
         }
         
         if (updatedCount > 0) {
             console.log(`✅ Updated ${updatedCount} monthly loans`);
-            saveData();
+            saveData(); // monthly loans updated - tracked via loop above
         }
     }
     
@@ -1490,7 +1480,7 @@
         off.print_company_name = newPrintName || '';
         let newTagline = prompt('प्रिंट में टैगलाइन', off.print_tagline || '');
         off.print_tagline = newTagline || '';
-        saveData();
+        saveData('officers', off.id);
         refreshOfficerList();
         refreshUI();
     }
@@ -1585,7 +1575,7 @@
         for (let [id, off] of Object.entries(officers)) if (off.name === name) { alert('इस नाम से कोई लोन ऑफिसर पहले से है!'); return; }
         const id = Date.now().toString();
         officers[id] = { id, name, password, mobile, created_date: getTodayDate(), print_company_name: printName, print_tagline: tagline, role: 'officer' };
-        saveData();
+        saveData('officers', id);
         alert('✅ लोन ऑफिसर बन गया!');
         document.getElementById('officerName').value = '';
         document.getElementById('officerPassword').value = '';
@@ -1647,7 +1637,7 @@
         } else {
             ledger[ledgerId] = { id: ledgerId, loan_id: null, user_id: userId, user_name: name, officer_id: currentUser.officerId || currentUser.id, date: displayDate, amount_paid: amount, old_balance: null, new_balance: null, type: 'direct', discount: 0 };
         }
-        saveData();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData();
         refreshUI();
         document.getElementById('collectionNameInput').value = '';
         document.getElementById('collectionLoanSelect').innerHTML = '<option value="">पहले ग्राहक चुनें</option>';
@@ -1766,7 +1756,8 @@
                 if (loan.created_from_principal && loan.previous_loan_id) { oldLoanInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')} | ब्याज दर: ${loan.interest_rate}%</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button><button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button><button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button><button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
+                const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button><button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button><button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button><button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -1826,7 +1817,7 @@
             if (fine.user_id === userId) { fine.user_name = newName; fines[fineId] = fine; }
         }
         
-        await saveData();
+        await saveData('users', userId);
         refreshUI();
         closeNewCustomerModal();
         if (currentSelectedUserId === userId) selectCustomer(userId, newName);
@@ -1880,7 +1871,7 @@
         
         const id = Date.now().toString();
         users[id] = { id, name, mobile, address, officer_id: currentUser.officerId || currentUser.id, created_date: getTodayDate() };
-        saveData();
+        saveData('users', id);
         refreshUI();
         closeNewCustomerModal();
         showToast(`✅ नया ग्राहक "${name}" बन गया!`, 2000);
@@ -2052,7 +2043,7 @@
                 createNewLoanFromPrincipal(loan, newPrincipal, paymentDate, amount);
                 showToast(`✅ मूलधन जमा! नया लोन बना: ₹${newPrincipal.toLocaleString('en-IN')}`, 3000);
             } else { showToast(`✅ मूलधन जमा! लोन पूर्ण हुआ।`, 3000); }
-            saveData(); refreshUI(); closePaymentModal(); return;
+            saveData('loans', loanId); refreshUI(); closePaymentModal(); return;
         }
         
         if (discount > 0) {
@@ -2070,7 +2061,7 @@
         loans[loanId] = loan;
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: paymentDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: discount };
-        saveData(); refreshUI(); closePaymentModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData(); refreshUI(); closePaymentModal();
         showToast(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${paymentDate})`, 2000);
     }
     
@@ -2099,7 +2090,7 @@
         loans[loanId] = loan;
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: getTodayDate(), amount_paid: 0, old_balance: loan.remaining_amount + discount, new_balance: loan.remaining_amount, type: 'discount', discount: discount };
-        saveData(); refreshUI(); closeDiscountModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData(); refreshUI(); closeDiscountModal();
         showToast(`🎁 ₹${discount} का डिस्काउंट दिया गया!`, 2000);
     }
     
@@ -2175,7 +2166,7 @@
             else { loan.status = 'active'; }
             loans[entry.loan_id] = loan;
         }
-        saveData();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); saveData();
         refreshUI();
         document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         showToast(`✅ पेमेंट अपडेट! ₹${oldAmount} → ₹${newAmount}`, 2000);
@@ -2353,10 +2344,7 @@
     
     function parseDateTime(str) {
         if (!str || str.trim() === '') return getTodayDate();
-        let input = str.toString().trim();
-        let datePart = input.split(',')[0].trim();
-        datePart = datePart.split(' at ')[0].trim();
-        
+
         const monthNames = {
             'jan': '01', 'january': '01', 'feb': '02', 'february': '02',
             'mar': '03', 'march': '03', 'apr': '04', 'april': '04',
@@ -2365,41 +2353,72 @@
             'oct': '10', 'october': '10', 'nov': '11', 'november': '11',
             'dec': '12', 'december': '12'
         };
-        
-        let dateStr = '';
-        
-        let match1 = datePart.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/i);
-        if (match1) {
-            let dd = match1[1].padStart(2, '0');
-            let mm = monthNames[match1[2].toLowerCase()] || '01';
-            let yyyy = match1[3];
-            dateStr = `${dd}/${mm}/${yyyy}`;
+
+        // Step 1: Puri string se sirf date wala hissa nikalo
+        // "03 May 2026, 04:55 pm"  →  "03 May 2026"
+        // "10-05-2026"             →  "10-05-2026"
+        let input = str.toString()
+            .replace(/₹/g, '')           // rupee symbol hata do
+            .replace(/\s*,\s*\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '')  // ", 04:55 pm" hata do
+            .replace(/\s+at\s+\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '') // " at 04:55 pm" hata do
+            .replace(/\s+\d{1,2}:\d{2}:\d{2}/g, '')               // " 04:55:30" hata do
+            .replace(/\s+\d{1,2}:\d{2}/g, '')                     // " 04:55" hata do
+            .trim();
+
+        let dd, mm, yyyy;
+
+        // Format 1: "03 May 2026" ya "3 May 2026" (Excel ki common style)
+        let m1 = input.match(/(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})/i);
+        if (m1) {
+            dd = m1[1].padStart(2, '0');
+            mm = monthNames[m1[2].toLowerCase()] || null;
+            yyyy = m1[3];
+            if (mm) return `${dd}/${mm}/${yyyy}`;
         }
-        
-        if (!dateStr) {
-            let match2 = datePart.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-            if (match2) {
-                dateStr = `${match2[1].padStart(2,'0')}/${match2[2].padStart(2,'0')}/${match2[3]}`;
+
+        // Format 2: "May 03 2026" (American style)
+        let m2 = input.match(/([a-zA-Z]{3,})\s+(\d{1,2}),?\s+(\d{4})/i);
+        if (m2) {
+            mm = monthNames[m2[1].toLowerCase()] || null;
+            dd = m2[2].padStart(2, '0');
+            yyyy = m2[3];
+            if (mm) return `${dd}/${mm}/${yyyy}`;
+        }
+
+        // Format 3: "10-05-2026" ya "10/05/2026" (DD-MM-YYYY)
+        let m3 = input.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (m3) {
+            dd = m3[1].padStart(2, '0');
+            mm = m3[2].padStart(2, '0');
+            yyyy = m3[3];
+            // Validate karo
+            let test = new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
+            if (test.getDate() == parseInt(dd) && test.getMonth() == parseInt(mm)-1) {
+                return `${dd}/${mm}/${yyyy}`;
             }
         }
-        
-        if (!dateStr) {
-            let match3 = datePart.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})/);
-            if (match3) {
-                let yy = parseInt(match3[3]);
-                let yyyy = yy >= 50 ? (1900 + yy) : (2000 + yy);
-                dateStr = `${match3[1].padStart(2,'0')}/${match3[2].padStart(2,'0')}/${yyyy}`;
-            }
+
+        // Format 4: "2026-05-10" (ISO YYYY-MM-DD)
+        let m4 = input.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (m4) {
+            yyyy = m4[1];
+            mm = m4[2].padStart(2, '0');
+            dd = m4[3].padStart(2, '0');
+            return `${dd}/${mm}/${yyyy}`;
         }
-        
-        if (dateStr) {
-            let parts = dateStr.split('/');
-            let testDate = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
-            if (testDate.getDate() === parseInt(parts[0]) && testDate.getMonth() === parseInt(parts[1])-1) {
-                return dateStr;
-            }
+
+        // Format 5: Short year "10-05-26"
+        let m5 = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+        if (m5) {
+            dd = m5[1].padStart(2, '0');
+            mm = m5[2].padStart(2, '0');
+            let yy = parseInt(m5[3]);
+            yyyy = (yy >= 50 ? 1900 + yy : 2000 + yy).toString();
+            return `${dd}/${mm}/${yyyy}`;
         }
-        
+
+        // Koi bhi format match nahi hua — aaj ki date
+        console.warn('[parseDateTime] Unrecognized format:', str);
         return getTodayDate();
     }
     
@@ -2408,46 +2427,48 @@
         let text = textarea.value.trim();
         if (!text) { alert('कुछ paste करें!'); return; }
         
-        let cleanText = text.replace(/[₹]/g, '').replace(/\t/g, ' ').replace(/,\s*\d{1,2}:\d{2}\s*(?:am|pm)/gi, '').replace(/\s+/g, ' ').trim();
-        
-        if (cleanText !== text) {
-            textarea.value = cleanText;
-            console.log("✅ Text cleaned automatically");
-        }
-        
-        const lines = cleanText.split('\n').filter(l => l.trim());
+        // Lines split karo — \n ya \r\n dono handle
+        const rawLines = text.split(/\r?\n/).filter(l => l.trim());
         bulkParsedRows = [];
         let errors = [];
         
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+        for (let i = 0; i < rawLines.length; i++) {
+            let line = rawLines[i].trim();
             if (!line) continue;
             
-            let parts = line.split(/\s+/);
-            let amountStr = parts[0];
-            let dateStr = parts.slice(1).join(' ');
-            
-            if (!dateStr || dateStr === '') {
-                let amountMatch = line.match(/^(\d+(?:\.\d+)?)/);
-                if (amountMatch) {
-                    amountStr = amountMatch[1];
-                    dateStr = line.replace(amountStr, '').trim();
+            // Tab se split karo pehle (Excel copy karta hai tab-separated)
+            // "₹ 400\t03 May 2026, 04:55 pm"  →  ["₹ 400", "03 May 2026, 04:55 pm"]
+            let parts;
+            if (line.includes('\t')) {
+                parts = line.split('\t').map(p => p.trim());
+            } else {
+                // Tab nahi hai — pehla word amount, baaki date
+                parts = line.split(/\s+/);
+                // ₹ alag se ho sakta hai: ["₹", "400", "03", "May", ...]
+                if (parts[0] === '₹' || parts[0] === 'Rs' || parts[0] === 'rs') {
+                    parts = [parts[0] + parts[1], parts.slice(2).join(' ')];
+                } else {
+                    parts = [parts[0], parts.slice(1).join(' ')];
                 }
             }
             
+            let amountStr = (parts[0] || '').replace(/₹|Rs\.?|,/gi, '').trim();
+            let dateStr   = (parts[1] || '').trim();
+            
             const amount = parseAmount(amountStr);
-            const parsedDate = parseDateTime(dateStr);
             
             if (!amount || amount <= 0) {
-                errors.push(`Line ${i+1}: राशि गलत (${amountStr})`);
+                errors.push(`Line ${i+1}: राशि गलत → "${parts[0] || line}"`);
                 continue;
             }
             
+            const parsedDate = parseDateTime(dateStr);
             bulkParsedRows.push({ amount, date: parsedDate });
         }
         
+        // Date ke hisaab se sort karo (purani tarikh pehle)
         bulkParsedRows.sort((a, b) => {
-            const toMs = d => { const p = d.split('/'); return new Date(p[2], p[1]-1, p[0]).getTime(); };
+            const toMs = d => { const p = d.split('/'); return new Date(+p[2], +p[1]-1, +p[0]).getTime(); };
             return toMs(a.date) - toMs(b.date);
         });
         
@@ -2499,23 +2520,65 @@
         const loanId = document.getElementById('bulkLoanId').value;
         const loan = loans[loanId];
         if (!loan) return;
+        if (loan.status === 'completed') { alert('⚠️ यह लोन पहले से बंद है!'); return; }
         if (!confirm(`क्या आप ${bulkParsedRows.length} payments जमा करना चाहते हैं?`)) return;
+        
         let successCount = 0, skipCount = 0;
         let baseTimestamp = Date.now();
+        let changedLedgerIds = [];
+        
         for (let i = 0; i < bulkParsedRows.length; i++) {
             const row = bulkParsedRows[i];
-            if (row.amount <= 0 || row.amount > loan.remaining_amount) { skipCount++; continue; }
+            
+            // Amount zero ya negative ho to skip
+            if (!row.amount || row.amount <= 0) { skipCount++; continue; }
+            
+            // Loan already complete ho gaya ho to baaki rows skip karo
+            if (loan.remaining_amount <= 0 || loan.status === 'completed') { 
+                skipCount++; 
+                continue; 
+            }
+            
             const oldRemaining = loan.remaining_amount;
-            const newRemaining = oldRemaining - row.amount;
+            // Agar payment remaining se zyada hai to sirf remaining tak lo
+            const actualAmount = Math.min(row.amount, oldRemaining);
+            const newRemaining = oldRemaining - actualAmount;
+            
             loan.remaining_amount = newRemaining > 0 ? newRemaining : 0;
             if (newRemaining <= 0) loan.status = 'completed';
-            const ledgerId = (baseTimestamp + successCount).toString();
-            ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: row.date, amount_paid: row.amount, old_balance: oldRemaining, new_balance: loan.remaining_amount, type: 'payment', discount: 0 };
+            
+            const ledgerId = (baseTimestamp + i).toString();
+            ledger[ledgerId] = { 
+                id: ledgerId, 
+                loan_id: loanId, 
+                user_id: loan.user_id, 
+                user_name: loan.user_name, 
+                officer_id: currentUser.officerId, 
+                date: row.date, 
+                amount_paid: actualAmount, 
+                old_balance: oldRemaining, 
+                new_balance: loan.remaining_amount, 
+                type: 'payment', 
+                discount: 0 
+            };
+            changedLedgerIds.push(ledgerId);
             successCount++;
         }
+        
         loans[loanId] = loan;
-        saveData(); refreshUI(); closeBulkPaymentModal();
-        showToast(`✅ ${successCount} payments जमा हो गई!`, 3000);
+        
+        // Sirf changed records track karke save karo
+        _pendingChanges.loans.add(loanId);
+        changedLedgerIds.forEach(id => _pendingChanges.ledger.add(id));
+        saveData();
+        
+        refreshUI(); 
+        closeBulkPaymentModal();
+        
+        let msg = `✅ ${successCount} payments जमा हो गई!`;
+        if (skipCount > 0) msg += ` (${skipCount} skip)`;
+        if (loan.status === 'completed') msg += ' 🎉 लोन पूरा!';
+        showToast(msg, 3000);
     }
     
     // ========== EDIT PAYMENT FUNCTIONS ==========
@@ -2555,7 +2618,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
@@ -2635,7 +2698,7 @@
         loans[loanId] = loan;
         const fineId = Date.now().toString();
         fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
-        saveData(); refreshUI(); closeOverdueModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.fines.add(fineId); saveData(); refreshUI(); closeOverdueModal();
         showToast(`✅ फाइन ₹${extra} जुड़ गया!`, 2000);
     }
     
@@ -2688,7 +2751,7 @@
             loan.principal = newPrincipal;
             loan.interest_rate = newInterestRate;
         }
-        saveData();
+        _pendingChanges.loans.add(loanId); saveData();
         refreshUI();
         closeEditLoanModal();
         showToast("✅ लोन अपडेट हो गया!", 2000);
@@ -2824,7 +2887,7 @@
                 status: 'active', last_month_check: displayStartDate, total_fine: 0, total_discount: 0
             };
         }
-        saveData();
+        _pendingChanges.loans.add(loanId); saveData();
         refreshUI();
         closeNewLoanModal();
         showToast("✅ लोन बन गया!", 2000);
