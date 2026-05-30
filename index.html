@@ -71,6 +71,7 @@
         .logout-btn { background: #e74c3c; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 12px; }
         .refresh-data-btn { background: #3498db; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 11px; margin-left: 5px; }
         .force-sync-btn { background: #e74c3c; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 11px; margin-left: 5px; font-weight: bold; }
+        .force-push-btn { background: #e67e22; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 11px; margin-left: 5px; font-weight: bold; }
         .lang-selector { background: rgba(255,255,255,0.2); padding: 3px 6px; border-radius: 6px; border: none; color: white; cursor: pointer; font-size: 11px; }
         .lang-selector option { background: #2c3e50; color: white; }
         .two-columns { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
@@ -341,6 +342,7 @@
         .sync-status.synced { background: #27ae60; }
         .sync-status.pending { background: #f39c12; }
         .sync-status.error { background: #e74c3c; }
+        .active-loans-table tbody { will-change: contents; }
         button, .tab-btn, .dropdown-icon-btn { transition: all 0.05s ease; cursor: pointer; }
         button:active, .tab-btn:active { transform: scale(0.97); opacity: 0.8; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -405,6 +407,7 @@
             <span id="syncStatus" class="sync-status">🔄 सिन्क...</span>
             <button class="refresh-data-btn" onclick="hardRefreshData()" title="Supabase से ताज़ा डेटा लोड करें">🔄 रिफ्रेश</button>
             <button class="force-sync-btn" onclick="emergencyForceSync()" title="पुराना डेटा हटाकर Supabase से नया लोड करें">🚨 FORCE SYNC</button>
+            <button class="force-push-btn" onclick="forcePushToSupabase()" title="सारा Local Data अभी Supabase पर भेजें">⬆️ FORCE PUSH</button>
             <select id="languageSelect" class="lang-selector" onchange="changeLanguage()"><option value="hi">हिंदी</option><option value="en">English</option></select>
             <button class="logout-btn" onclick="logout()">लॉगआउट</button>
         </div>
@@ -967,6 +970,102 @@
         }
     }
     
+    // ========== FORCE PUSH: Local → Supabase ==========
+    async function forcePushToSupabase() {
+        if (!supabaseClient) { alert('❌ Supabase connect nahi hai!'); return; }
+        if (!navigator.onLine) { alert('❌ Internet nahi hai! Online hokar try karein.'); return; }
+        if (!currentUser) { alert('❌ Pehle login karein!'); return; }
+
+        const totalRecords = Object.keys(users).length + Object.keys(loans).length + Object.keys(ledger).length + Object.keys(fines).length;
+        if (!confirm(`⬆️ FORCE PUSH\n\nSara local data Supabase par bheja jayega:\n👤 Users: ${Object.keys(users).length}\n📋 Loans: ${Object.keys(loans).length}\n💰 Ledger: ${Object.keys(ledger).length}\n⚠️ Fines: ${Object.keys(fines).length}\n\nTotal: ${totalRecords} records\n\nJari rakhen?`)) return;
+
+        updateSyncStatus('pending', '⬆️ Push ho raha...');
+        const btn = document.querySelector('.force-push-btn');
+        if (btn) { btn.disabled = true; btn.innerText = '⏳ Pushing...'; }
+
+        try {
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Users push
+            const allUsers = Object.values(users);
+            if (allUsers.length > 0) {
+                const CHUNK = 50;
+                for (let i = 0; i < allUsers.length; i += CHUNK) {
+                    const chunk = allUsers.slice(i, i + CHUNK);
+                    const { error } = await supabaseClient.from('users').upsert(chunk);
+                    if (error) { console.error('Users push error:', error); errorCount++; }
+                    else successCount += chunk.length;
+                }
+            }
+
+            // Loans push
+            const allLoans = Object.values(loans);
+            if (allLoans.length > 0) {
+                const CHUNK = 50;
+                for (let i = 0; i < allLoans.length; i += CHUNK) {
+                    const chunk = allLoans.slice(i, i + CHUNK);
+                    const { error } = await supabaseClient.from('loans').upsert(chunk);
+                    if (error) { console.error('Loans push error:', error); errorCount++; }
+                    else successCount += chunk.length;
+                }
+            }
+
+            // Ledger push
+            const allLedger = Object.values(ledger);
+            if (allLedger.length > 0) {
+                const CHUNK = 100;
+                for (let i = 0; i < allLedger.length; i += CHUNK) {
+                    const chunk = allLedger.slice(i, i + CHUNK);
+                    const { error } = await supabaseClient.from('ledger').upsert(chunk);
+                    if (error) { console.error('Ledger push error:', error); errorCount++; }
+                    else successCount += chunk.length;
+                }
+            }
+
+            // Fines push
+            const allFines = Object.values(fines);
+            if (allFines.length > 0) {
+                const CHUNK = 50;
+                for (let i = 0; i < allFines.length; i += CHUNK) {
+                    const chunk = allFines.slice(i, i + CHUNK);
+                    const { error } = await supabaseClient.from('fines').upsert(chunk);
+                    if (error) { console.error('Fines push error:', error); errorCount++; }
+                    else successCount += chunk.length;
+                }
+            }
+
+            if (errorCount === 0) {
+                updateSyncStatus('synced', '✅ सिन्क');
+                showToast(`✅ FORCE PUSH COMPLETE! ${successCount} records Supabase par save ho gaye!`, 4000);
+            } else {
+                updateSyncStatus('error', '⚠️ Partial');
+                showToast(`⚠️ ${successCount} records gaye, ${errorCount} chunks mein error. Console check karein.`, 5000);
+            }
+
+        } catch (err) {
+            console.error('Force push error:', err);
+            updateSyncStatus('error', '❌ Push nahi hua');
+            alert('❌ Error: ' + err.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerText = '⬆️ FORCE PUSH'; }
+        }
+    }
+
+    // ========== SMART REFRESH: Sirf zaroori parts update karo ==========
+    let _lastRefreshHash = '';
+    function smartRefresh() {
+        if (!currentUser) return;
+        // Data ka quick fingerprint — agar kuch badla nahi to full refresh skip karo
+        const hash = Object.keys(loans).length + '_' + Object.keys(ledger).length + '_' + Object.keys(users).length;
+        if (hash === _lastRefreshHash) {
+            console.log('[smartRefresh] Data same hai, skip.');
+            return;
+        }
+        _lastRefreshHash = hash;
+        refreshUI();
+    }
+
     // ========== AUTHENTICATION ==========
     function saveSession(user) {
         try { localStorage.setItem('hlb_current_user', JSON.stringify(user)); } catch(e) {}
@@ -2970,7 +3069,7 @@
             const tbody = document.getElementById('activeLoansList');
             if (!active.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">कोई एक्टिव लोन नहीं<\/td><\/tr>'; }
             else {
-                tbody.innerHTML = '';
+                let rows = '';
                 for (let [id, loan] of active) {
                     let perDayDisplay = '-';
                     if (loan.type === 'day' && loan.per_day) perDayDisplay = '₹' + loan.per_day.toFixed(2);
@@ -2981,7 +3080,7 @@
                     if (users[loan.user_id] && users[loan.user_id].address) {
                         customerAddress = users[loan.user_id].address;
                     }
-                    tbody.innerHTML += `<tr>
+                    rows += `<tr>
                         <td class="customer-cell"><div class="customer-name">${customerDisplay} ${customerAddress ? `<span style="font-size:9px; color:#666;">(${customerAddress.substring(0, 20)})</span>` : ''}</div><div class="customer-principal"><strong>मूलधन: ₹${loan.principal.toLocaleString('en-IN')}</strong></div></td>
                         <td class="remaining-amount"><strong>₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></td>
                         <td class="per-day-amount">${perDayDisplay}</td>
@@ -3004,21 +3103,20 @@
                         <\/td>
                     </tr>`;
                 }
+                tbody.innerHTML = rows;
             }
             
-            document.addEventListener('click', function(event) {
-                if (!event.target.closest('.action-dropdown')) {
-                    document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
-                }
-            });
-            
             if (document.getElementById('loanType') && document.getElementById('loanType').value === 'day') calculateDayLoan();
-            document.getElementById('datePicker').value = getTodayDateForInput();
-            showCollectionByDate();
-            initMobileTabs();
             showOverdueAlert();
         });
     }
+    
+    // Click listener sirf ONCE lagao — refreshUI ke bahar
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.action-dropdown')) {
+            document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
+        }
+    });
     
     // ========== LOAD DATA ON PAGE START ==========
     async function loadData() {
@@ -3075,12 +3173,12 @@
         window.updateOnlineStatus();
         loadData();
         
-        setInterval(() => { if (currentUser) refreshUI(); }, 30000);
+        setInterval(() => { if (currentUser) smartRefresh(); }, 60000);
         setInterval(() => { 
             if (navigator.onLine && currentUser && supabaseClient) { 
                 syncFromSupabase().catch(err => console.error(err)); 
             } 
-        }, 5 * 60 * 1000);
+        }, 10 * 60 * 1000);
     });
 </script>
 </body>
