@@ -650,7 +650,56 @@
     let _lastMonthlyCheck = 0;
     let _syncingNow = false;
     // Changed records tracker — sirf naye/badle records Supabase par jayenge
-    let _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
+    // Changed records tracker — localStorage mein save hota hai taaki reload ke baad bhi rahe
+    const PENDING_KEY = 'hlb_pending_changes';
+    
+    function _loadPending() {
+        try {
+            const raw = localStorage.getItem(PENDING_KEY);
+            if (!raw) return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
+            const parsed = JSON.parse(raw);
+            return {
+                users:  new Set(parsed.users  || []),
+                loans:  new Set(parsed.loans  || []),
+                ledger: new Set(parsed.ledger || []),
+                fines:  new Set(parsed.fines  || []),
+            };
+        } catch(e) {
+            return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
+        }
+    }
+    
+    function _savePending() {
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify({
+                users:  [..._pendingChanges.users],
+                loans:  [..._pendingChanges.loans],
+                ledger: [..._pendingChanges.ledger],
+                fines:  [..._pendingChanges.fines],
+            }));
+        } catch(e) { console.warn('Pending save failed:', e); }
+        updatePendingCount(); // button update karo
+    }
+    
+    function updatePendingCount() {
+        const btn = document.querySelector('.force-push-btn');
+        if (!btn) return;
+        const total = _pendingChanges.users.size + _pendingChanges.loans.size + 
+                      _pendingChanges.ledger.size + _pendingChanges.fines.size;
+        if (total > 0) {
+            btn.innerText = `⬆️ PUSH (${total})`;
+            btn.style.background = '#e74c3c'; // laal — attention chahiye
+            btn.title = `${total} records Supabase par save nahi hue — Click karke push karo`;
+        } else {
+            btn.innerText = '⬆️ FORCE PUSH';
+            btn.style.background = '#e67e22'; // normal orange
+            btn.title = 'Sab kuch sync hai';
+        }
+    }
+    
+    let _pendingChanges = _loadPending();
+    // DOM ready hone ke baad button update karo
+    document.addEventListener('DOMContentLoaded', () => updatePendingCount());
     
     const GITHUB_USERS_URL = "users.json";
     const DB_NAME = 'HLBFinanceDB';
@@ -777,7 +826,10 @@
     async function saveData(changedTable, changedId) {
         // Changed record track karo
         if (changedTable && changedId) {
-            if (_pendingChanges[changedTable]) _pendingChanges[changedTable].add(changedId);
+            if (_pendingChanges[changedTable]) {
+                _pendingChanges[changedTable].add(changedId);
+                _savePending(); // localStorage mein turant save karo
+            }
         }
         if (saveTimeout) clearTimeout(saveTimeout);
         
@@ -823,6 +875,7 @@
                             if (error) { console.error("❌ Fines sync error:", error); anyError = true; }
                             else { _pendingChanges.fines.clear(); console.log(`✅ Synced ${toSync.fines.length} fines`); }
                         }
+                        if (!anyError) { _savePending(); } // localStorage bhi clear karo — _savePending updatePendingCount bhi call karega
                         
                         updateSyncStatus(anyError ? 'error' : 'synced', anyError ? '⚠️ Partial' : '✅ सिन्क');
                     } catch(syncErr) {
@@ -950,8 +1003,11 @@
         updateSyncStatus('pending', '🔄 फोर्स सिन्क...');
         
         try {
+            // Pending changes bachao — baaki sab clear karo
+            const savedPending = localStorage.getItem(PENDING_KEY);
             localStorage.clear();
             sessionStorage.clear();
+            if (savedPending) localStorage.setItem(PENDING_KEY, savedPending);
             
             let databases = await indexedDB.databases();
             for (let dbInfo of databases) {
@@ -987,18 +1043,42 @@
         if (!navigator.onLine) { alert('❌ Internet nahi hai! Online hokar try karein.'); return; }
         if (!currentUser) { alert('❌ Pehle login karein!'); return; }
 
-        const pendingUsers = [..._pendingChanges.users].map(id => users[id]).filter(Boolean);
-        const pendingLoans = [..._pendingChanges.loans].map(id => loans[id]).filter(Boolean);
-        const pendingLedger = [..._pendingChanges.ledger].map(id => ledger[id]).filter(Boolean);
-        const pendingFines = [..._pendingChanges.fines].map(id => fines[id]).filter(Boolean);
-        const totalPending = pendingUsers.length + pendingLoans.length + pendingLedger.length + pendingFines.length;
+        // _pendingChanges mein IDs hain — unka data memory se lo
+        // Agar memory mein nahi to poore table se lo (safe fallback)
+        const pendingUserIds  = [..._pendingChanges.users];
+        const pendingLoanIds  = [..._pendingChanges.loans];
+        const pendingLedgerIds = [..._pendingChanges.ledger];
+        const pendingFineIds  = [..._pendingChanges.fines];
+
+        // Memory se data nikalo — jo mil jaaye
+        const pendingUsers  = pendingUserIds.map(id => users[id]).filter(Boolean);
+        const pendingLoans  = pendingLoanIds.map(id => loans[id]).filter(Boolean);
+        const pendingLedger = pendingLedgerIds.map(id => ledger[id]).filter(Boolean);
+        const pendingFines  = pendingFineIds.map(id => fines[id]).filter(Boolean);
+
+        // Agar koi ID memory mein nahi mila — to poora table push karo (safe)
+        const missingUsers  = pendingUserIds.length > 0 && pendingUsers.length === 0;
+        const missingLoans  = pendingLoanIds.length > 0 && pendingLoans.length === 0;
+        const missingLedger = pendingLedgerIds.length > 0 && pendingLedger.length === 0;
+        const missingFines  = pendingFineIds.length > 0 && pendingFines.length === 0;
+
+        // Final data to push
+        const finalUsers  = missingUsers  ? Object.values(users)  : pendingUsers;
+        const finalLoans  = missingLoans  ? Object.values(loans)  : pendingLoans;
+        const finalLedger = missingLedger ? Object.values(ledger) : pendingLedger;
+        const finalFines  = missingFines  ? Object.values(fines)  : pendingFines;
+
+        const totalPending = finalUsers.length + finalLoans.length + finalLedger.length + finalFines.length;
 
         if (totalPending === 0) {
             showToast('✅ Sab kuch already sync hai! Koi pending change nahi.', 3000);
             return;
         }
 
-        if (!confirm(`⬆️ FORCE PUSH — Sirf pending changes\n\n👤 Users: ${pendingUsers.length}\n📋 Loans: ${pendingLoans.length}\n💰 Ledger: ${pendingLedger.length}\n⚠️ Fines: ${pendingFines.length}\n\nTotal: ${totalPending} records\n\nJari rakhen?`)) return;
+        const fallbackNote = (missingUsers || missingLoans || missingLedger || missingFines) 
+            ? '\n⚠️ Kuch IDs memory mein nahi mili — poora table push hoga' : '';
+
+        if (!confirm(`⬆️ FORCE PUSH — Pending changes\n\n👤 Users: ${finalUsers.length}${missingUsers?' (poora table)':''}\n📋 Loans: ${finalLoans.length}${missingLoans?' (poora table)':''}\n💰 Ledger: ${finalLedger.length}${missingLedger?' (poora table)':''}\n⚠️ Fines: ${finalFines.length}${missingFines?' (poora table)':''}\n\nTotal: ${totalPending} records${fallbackNote}\n\nJari rakhen?`)) return;
 
         updateSyncStatus('pending', '⬆️ Push ho raha...');
         const btn = document.querySelector('.force-push-btn');
@@ -1019,10 +1099,11 @@
                 if (ok) pendingSet.clear();
             }
 
-            if (pendingUsers.length > 0) await pushChunked('users', pendingUsers, _pendingChanges.users);
-            if (pendingLoans.length > 0) await pushChunked('loans', pendingLoans, _pendingChanges.loans);
-            if (pendingLedger.length > 0) await pushChunked('ledger', pendingLedger, _pendingChanges.ledger);
-            if (pendingFines.length > 0) await pushChunked('fines', pendingFines, _pendingChanges.fines);
+            if (finalUsers.length > 0)  await pushChunked('users',  finalUsers,  _pendingChanges.users);
+            if (finalLoans.length > 0)  await pushChunked('loans',  finalLoans,  _pendingChanges.loans);
+            if (finalLedger.length > 0) await pushChunked('ledger', finalLedger, _pendingChanges.ledger);
+            if (finalFines.length > 0)  await pushChunked('fines',  finalFines,  _pendingChanges.fines);
+            _savePending(); // localStorage update karo
 
             if (errorCount === 0) {
                 updateSyncStatus('synced', '✅ सिन्क');
@@ -1037,7 +1118,7 @@
             updateSyncStatus('error', '❌ Push nahi hua');
             alert('❌ Error: ' + err.message);
         } finally {
-            if (btn) { btn.disabled = false; btn.innerText = '⬆️ FORCE PUSH'; }
+            if (btn) { btn.disabled = false; updatePendingCount(); }
         }
     }
 
@@ -1435,7 +1516,7 @@
                 _pendingChanges.loans.add(loanId);
             }
         }
-        
+        _savePending();
         if (updatedCount > 0) {
             console.log(`✅ Updated ${updatedCount} monthly loans`);
             saveData(); // monthly loans updated - tracked via loop above
@@ -1637,7 +1718,7 @@
         } else {
             ledger[ledgerId] = { id: ledgerId, loan_id: null, user_id: userId, user_name: name, officer_id: currentUser.officerId || currentUser.id, date: displayDate, amount_paid: amount, old_balance: null, new_balance: null, type: 'direct', discount: 0 };
         }
-        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData();
         refreshUI();
         document.getElementById('collectionNameInput').value = '';
         document.getElementById('collectionLoanSelect').innerHTML = '<option value="">पहले ग्राहक चुनें</option>';
@@ -1757,7 +1838,7 @@
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" onclick="printLoanDetails('${id}')">${t('print')}</button><button class="small" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><button class="small warning" onclick="openOverdueModal('${id}')">${t('fine')}</button><button class="small warning" onclick="openDiscountModal('${id}')">${t('discount')}</button><button class="small" onclick="openEditLoanModal('${id}')">${t('editLoan')}</button><button class="small danger" onclick="openDeleteLoanModal('${id}')">${t('deleteLoan')}</button></div></div>`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -2061,7 +2142,7 @@
         loans[loanId] = loan;
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: paymentDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: discount };
-        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData(); refreshUI(); closePaymentModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closePaymentModal();
         showToast(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${paymentDate})`, 2000);
     }
     
@@ -2090,7 +2171,7 @@
         loans[loanId] = loan;
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: getTodayDate(), amount_paid: 0, old_balance: loan.remaining_amount + discount, new_balance: loan.remaining_amount, type: 'discount', discount: discount };
-        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); saveData(); refreshUI(); closeDiscountModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeDiscountModal();
         showToast(`🎁 ₹${discount} का डिस्काउंट दिया गया!`, 2000);
     }
     
@@ -2166,7 +2247,7 @@
             else { loan.status = 'active'; }
             loans[entry.loan_id] = loan;
         }
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); saveData();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData();
         refreshUI();
         document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         showToast(`✅ पेमेंट अपडेट! ₹${oldAmount} → ₹${newAmount}`, 2000);
@@ -2570,7 +2651,7 @@
         // Sirf changed records track karke save karo
         _pendingChanges.loans.add(loanId);
         changedLedgerIds.forEach(id => _pendingChanges.ledger.add(id));
-        saveData();
+        _savePending(); saveData();
         
         refreshUI(); 
         closeBulkPaymentModal();
@@ -2618,7 +2699,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
@@ -2698,7 +2779,7 @@
         loans[loanId] = loan;
         const fineId = Date.now().toString();
         fines[fineId] = { id: fineId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId, date: getTodayDate(), amount: extra, type: 'fine' };
-        _pendingChanges.loans.add(loanId); _pendingChanges.fines.add(fineId); saveData(); refreshUI(); closeOverdueModal();
+        _pendingChanges.loans.add(loanId); _pendingChanges.fines.add(fineId); _savePending(); saveData(); refreshUI(); closeOverdueModal();
         showToast(`✅ फाइन ₹${extra} जुड़ गया!`, 2000);
     }
     
@@ -2751,7 +2832,7 @@
             loan.principal = newPrincipal;
             loan.interest_rate = newInterestRate;
         }
-        _pendingChanges.loans.add(loanId); saveData();
+        _pendingChanges.loans.add(loanId); _savePending(); saveData();
         refreshUI();
         closeEditLoanModal();
         showToast("✅ लोन अपडेट हो गया!", 2000);
@@ -2887,7 +2968,7 @@
                 status: 'active', last_month_check: displayStartDate, total_fine: 0, total_discount: 0
             };
         }
-        _pendingChanges.loans.add(loanId); saveData();
+        _pendingChanges.loans.add(loanId); _savePending(); saveData();
         refreshUI();
         closeNewLoanModal();
         showToast("✅ लोन बन गया!", 2000);
