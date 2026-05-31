@@ -1052,11 +1052,9 @@
         updateSyncStatus('pending', '🔄 फोर्स सिन्क...');
         
         try {
-            // Pending changes bachao — baaki sab clear karo
-            const savedPending = localStorage.getItem(PENDING_KEY);
+            // Sab clear karo — pending bhi clear hoga (Supabase se fresh data aayega)
             localStorage.clear();
             sessionStorage.clear();
-            if (savedPending) localStorage.setItem(PENDING_KEY, savedPending);
             
             let databases = await indexedDB.databases();
             for (let dbInfo of databases) {
@@ -1073,14 +1071,16 @@
             fines = {};
             currentSelectedUserId = null;
             
+            // Pending poora reset karo — Supabase se fresh data aayega
+            _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
+            localStorage.removeItem(PENDING_KEY);
+            
             if (supabaseClient && currentUser) {
                 await syncFromSupabase(true);
-                // Force Sync ke baad sab Supabase se fresh aaya — pending clear karo
-                _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
-                _savePending();
                 showToast("✅ FORCE SYNC COMPLETE!", 3000);
             }
             
+            updatePendingCount();
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
         } catch(err) {
