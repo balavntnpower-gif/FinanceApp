@@ -977,45 +977,43 @@
             
             const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
             
-            let queryUsers = supabaseClient.from('users').select('*');
-            let queryLoans = supabaseClient.from('loans').select('*');
-            let queryLedger = supabaseClient.from('ledger').select('*');
-            let queryFines = supabaseClient.from('fines').select('*');
-            let queryOfficers = supabaseClient.from('officers').select('*');
-            
-            if (officerId && currentUser.role !== 'admin') {
-                queryUsers = queryUsers.eq('officer_id', officerId);
-                queryLoans = queryLoans.eq('officer_id', officerId);
-                queryLedger = queryLedger.eq('officer_id', officerId);
-                queryFines = queryFines.eq('officer_id', officerId);
+            // Saari rows fetch karo — 1000 ki limit se zyada bhi
+            async function fetchAll(table, filters = {}) {
+                const PAGE = 1000;
+                let allData = [];
+                let from = 0;
+                while (true) {
+                    let query = supabaseClient.from(table).select('*').range(from, from + PAGE - 1);
+                    for (let [col, val] of Object.entries(filters)) {
+                        query = query.eq(col, val);
+                    }
+                    const { data, error } = await query;
+                    if (error) throw new Error(`${table} fetch error: ${error.message}`);
+                    if (!data || data.length === 0) break;
+                    allData = allData.concat(data);
+                    if (data.length < PAGE) break; // last page
+                    from += PAGE;
+                }
+                console.log(`✅ ${table}: ${allData.length} rows fetched`);
+                return allData;
             }
+            
+            const filters = (officerId && currentUser.role !== 'admin') ? { officer_id: officerId } : {};
             
             const [usersData, loansData, ledgerData, finesData, officersData] = await Promise.all([
-                queryUsers, queryLoans, queryLedger, queryFines, queryOfficers
+                fetchAll('users',   filters),
+                fetchAll('loans',   filters),
+                fetchAll('ledger',  filters),
+                fetchAll('fines',   filters),
+                fetchAll('officers', {}),
             ]);
             
-            if (usersData.data && usersData.data.length > 0) {
-                usersData.data.forEach(u => { users[u.id] = u; });
-                console.log(`✅ Loaded ${usersData.data.length} users from Supabase`);
-            }
-            
-            if (loansData.data && loansData.data.length > 0) {
-                loansData.data.forEach(l => { loans[l.id] = l; });
-                console.log(`✅ Loaded ${loansData.data.length} loans from Supabase`);
-            }
-            
-            if (ledgerData.data && ledgerData.data.length > 0) {
-                ledgerData.data.forEach(l => { ledger[l.id] = l; });
-                console.log(`✅ Loaded ${ledgerData.data.length} ledger entries from Supabase`);
-            }
-            
-            if (finesData.data && finesData.data.length > 0) {
-                finesData.data.forEach(f => { fines[f.id] = f; });
-            }
-            
-            if (officersData.data && officersData.data.length > 0 && currentUser.role === 'admin') {
-                officersData.data.forEach(o => { officers[o.id] = o; });
-            }
+            if (usersData.length > 0)   usersData.forEach(u => { users[u.id] = u; });
+            if (loansData.length > 0)   loansData.forEach(l => { loans[l.id] = l; });
+            if (ledgerData.length > 0)  ledgerData.forEach(l => { ledger[l.id] = l; });
+            if (finesData.length > 0)   finesData.forEach(f => { fines[f.id] = f; });
+            if (officersData.length > 0 && currentUser.role === 'admin')
+                officersData.forEach(o => { officers[o.id] = o; });
             
             await saveDataToLocal();
             refreshUI();
@@ -1249,7 +1247,7 @@
             saveSession(currentUser);
             showDashboard();
             updateExpiryBadge(null);
-            if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
+            if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
             return;
         }
         
@@ -1268,7 +1266,7 @@
                     saveSession(currentUser);
                     showDashboard();
                     updateExpiryBadge(officer.expiry);
-                    if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
+                    if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
                     return;
                 } else { 
                     document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; 
@@ -1288,7 +1286,7 @@
         saveSession(currentUser);
         showDashboard();
         updateExpiryBadge(user.expiry);
-        if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
+        if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
     }
     
     function logout() {
@@ -3201,13 +3199,19 @@
     window.updateOnlineStatus = function() {
         const indicator = document.getElementById('offlineIndicator');
         if (navigator.onLine) {
-            indicator.textContent = '✅ Online - Syncing...';
+            indicator.textContent = '✅ Online';
             indicator.classList.add('online');
             indicator.style.display = 'block';
+            // Sirf pending push karo — poora sync nahi (heavy hota hai)
             if (currentUser && supabaseClient) {
-                syncFromSupabase();
+                const pending = _pendingChanges.users.size + _pendingChanges.loans.size + 
+                                _pendingChanges.ledger.size + _pendingChanges.fines.size;
+                if (pending > 0) {
+                    indicator.textContent = `✅ Online - ${pending} records push ho rahe...`;
+                    saveData(); // pending records push karo
+                }
             }
-            setTimeout(() => indicator.style.display = 'none', 4000);
+            setTimeout(() => indicator.style.display = 'none', 3000);
         } else {
             indicator.textContent = '📡 Offline Mode (Data saved locally)';
             indicator.classList.remove('online');
@@ -3226,11 +3230,19 @@
                 _lastMonthlyCheck = now;
             }
             
+            // Ledger ko pehle loan_id se group karo — O(n) — nested loop nahi
+            const ledgerByLoan = {};
+            for (let [id, entry] of Object.entries(ledger)) {
+                if (!ledgerByLoan[entry.loan_id]) ledgerByLoan[entry.loan_id] = [];
+                ledgerByLoan[entry.loan_id].push(entry);
+            }
+            
             for (let [loanId, loan] of Object.entries(loans)) {
                 if (loan.type === 'day') {
                     let totalPaid = 0;
-                    for (let [id, entry] of Object.entries(ledger)) {
-                        if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
+                    const entries = ledgerByLoan[loanId] || [];
+                    for (let entry of entries) {
+                        if (entry.type === 'payment' || entry.type === 'direct') {
                             totalPaid += entry.amount_paid;
                         }
                     }
@@ -3248,10 +3260,12 @@
             
             const select = document.getElementById('loanCustomerSelect');
             if (select && currentUser) {
-                select.innerHTML = '<option value="">-- ड्रॉपडाउन --</option>';
                 let customers = Object.entries(users);
                 if (currentUser.role === 'officer') customers = customers.filter(([id,u]) => u.officer_id === currentUser.officerId);
-                for (let [id, u] of customers) { select.innerHTML += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`; }
+                let optHtml = '<option value="">-- ड्रॉपडाउन --</option>';
+                for (let [id, u] of customers) { optHtml += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`; }
+                select.innerHTML = optHtml;
+            }
             }
             
             let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
