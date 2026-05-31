@@ -671,22 +671,48 @@
     async function _verifyPendingWithSupabase() {
         if (!supabaseClient || !currentUser || !navigator.onLine) return;
         try {
-            const loanIds = [..._pendingChanges.loans];
+            const loanIds  = [..._pendingChanges.loans];
             const ledgerIds = [..._pendingChanges.ledger];
-            if (loanIds.length === 0 && ledgerIds.length === 0) return;
+            const userIds  = [..._pendingChanges.users];
+            const fineIds  = [..._pendingChanges.fines];
 
-            // Supabase mein check karo — jo hain unhe pending se hata do
+            if (loanIds.length === 0 && ledgerIds.length === 0 && 
+                userIds.length === 0 && fineIds.length === 0) return;
+
+            // Supabase se check karo — jo IDs wahan hain unhe pending se hata do
+            // IMPORTANT: String mein convert karo — type mismatch fix
             if (loanIds.length > 0) {
                 const { data } = await supabaseClient.from('loans').select('id').in('id', loanIds);
-                if (data) { data.forEach(r => _pendingChanges.loans.delete(r.id)); }
+                if (data) data.forEach(r => {
+                    _pendingChanges.loans.delete(String(r.id));
+                    _pendingChanges.loans.delete(r.id); // number bhi try karo
+                });
             }
             if (ledgerIds.length > 0) {
                 const { data } = await supabaseClient.from('ledger').select('id').in('id', ledgerIds);
-                if (data) { data.forEach(r => _pendingChanges.ledger.delete(r.id)); }
+                if (data) data.forEach(r => {
+                    _pendingChanges.ledger.delete(String(r.id));
+                    _pendingChanges.ledger.delete(r.id);
+                });
             }
+            if (userIds.length > 0) {
+                const { data } = await supabaseClient.from('users').select('id').in('id', userIds);
+                if (data) data.forEach(r => {
+                    _pendingChanges.users.delete(String(r.id));
+                    _pendingChanges.users.delete(r.id);
+                });
+            }
+            if (fineIds.length > 0) {
+                const { data } = await supabaseClient.from('fines').select('id').in('id', fineIds);
+                if (data) data.forEach(r => {
+                    _pendingChanges.fines.delete(String(r.id));
+                    _pendingChanges.fines.delete(r.id);
+                });
+            }
+
             _savePending();
-            console.log('[Pending] Verified with Supabase. Remaining:', 
-                _pendingChanges.loans.size, 'loans,', _pendingChanges.ledger.size, 'ledger');
+            console.log('[Pending] After verify — Loans:', _pendingChanges.loans.size, 
+                'Ledger:', _pendingChanges.ledger.size);
         } catch(e) { console.warn('[Pending] Verify failed:', e); }
     }
     
@@ -1012,6 +1038,8 @@
         updateSyncStatus('pending', '🔄 लोड हो रहा...');
         const success = await syncFromSupabase(true);
         if (success) {
+            // Refresh ke baad Supabase se verify karo — sach mein pending kya hai
+            await _verifyPendingWithSupabase();
             showToast("✅ डेटा ताज़ा हो गया!", 2000);
         } else {
             alert("❌ डेटा लोड करने में एरर!");
@@ -1047,6 +1075,9 @@
             
             if (supabaseClient && currentUser) {
                 await syncFromSupabase(true);
+                // Force Sync ke baad sab Supabase se fresh aaya — pending clear karo
+                _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
+                _savePending();
                 showToast("✅ FORCE SYNC COMPLETE!", 3000);
             }
             
