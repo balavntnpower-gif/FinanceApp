@@ -976,49 +976,54 @@
             console.log("🔄 Syncing FROM Supabase...");
             
             const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
+            const filters = (officerId && currentUser.role !== 'admin') ? { officer_id: officerId } : {};
             
             // Saari rows fetch karo — 1000 ki limit se zyada bhi
-            async function fetchAll(table, filters = {}) {
+            async function fetchAll(table, tableFilters) {
                 const PAGE = 1000;
                 let allData = [];
                 let from = 0;
                 while (true) {
                     let query = supabaseClient.from(table).select('*').range(from, from + PAGE - 1);
-                    for (let [col, val] of Object.entries(filters)) {
+                    for (let [col, val] of Object.entries(tableFilters)) {
                         query = query.eq(col, val);
                     }
                     const { data, error } = await query;
-                    if (error) throw new Error(`${table} fetch error: ${error.message}`);
+                    if (error) { console.error(`${table} error:`, error.message); break; }
                     if (!data || data.length === 0) break;
                     allData = allData.concat(data);
-                    if (data.length < PAGE) break; // last page
+                    if (data.length < PAGE) break;
                     from += PAGE;
                 }
-                console.log(`✅ ${table}: ${allData.length} rows fetched`);
+                console.log(`✅ ${table}: ${allData.length} rows`);
                 return allData;
             }
             
-            const filters = (officerId && currentUser.role !== 'admin') ? { officer_id: officerId } : {};
+            // Parallel fetch — officers sirf admin ke liye
+            const promises = [
+                fetchAll('users',  filters),
+                fetchAll('loans',  filters),
+                fetchAll('ledger', filters),
+                fetchAll('fines',  filters),
+            ];
+            if (currentUser.role === 'admin') {
+                promises.push(fetchAll('officers', {}));
+            }
             
-            const [usersData, loansData, ledgerData, finesData, officersData] = await Promise.all([
-                fetchAll('users',   filters),
-                fetchAll('loans',   filters),
-                fetchAll('ledger',  filters),
-                fetchAll('fines',   filters),
-                fetchAll('officers', {}),
-            ]);
+            const results = await Promise.all(promises);
+            const [usersData, loansData, ledgerData, finesData] = results;
+            const officersData = results[4] || [];
             
             if (usersData.length > 0)   usersData.forEach(u => { users[u.id] = u; });
             if (loansData.length > 0)   loansData.forEach(l => { loans[l.id] = l; });
             if (ledgerData.length > 0)  ledgerData.forEach(l => { ledger[l.id] = l; });
             if (finesData.length > 0)   finesData.forEach(f => { fines[f.id] = f; });
-            if (officersData.length > 0 && currentUser.role === 'admin')
-                officersData.forEach(o => { officers[o.id] = o; });
+            if (officersData.length > 0) officersData.forEach(o => { officers[o.id] = o; });
             
             await saveDataToLocal();
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
-            console.log("✅ Sync from Supabase completed");
+            console.log("✅ Sync complete");
             return true;
             
         } catch(err) { 
