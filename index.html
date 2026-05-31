@@ -3271,7 +3271,6 @@
                 for (let [id, u] of customers) { optHtml += `<option value="${id}">${u.name}${u.address ? ' - ' + u.address.substring(0, 20) : ''}</option>`; }
                 select.innerHTML = optHtml;
             }
-            }
             
             let active = Object.entries(loans).filter(([id,l]) => l.status === 'active');
             if (currentUser && currentUser.role === 'officer') active = active.filter(([id,l]) => l.officer_id === currentUser.officerId);
