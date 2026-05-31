@@ -649,6 +649,7 @@
     let saveTimeout = null;
     let _lastMonthlyCheck = 0;
     let _syncingNow = false;
+    // Changed records tracker — sirf naye/badle records Supabase par jayenge
     // Changed records tracker — localStorage mein save hota hai taaki reload ke baad bhi rahe
     const PENDING_KEY = 'hlb_pending_changes';
     
@@ -656,16 +657,37 @@
         try {
             const raw = localStorage.getItem(PENDING_KEY);
             if (!raw) return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
-            const parsed = JSON.parse(raw);
+            const p = JSON.parse(raw);
             return {
-                users:  new Set(parsed.users  || []),
-                loans:  new Set(parsed.loans  || []),
-                ledger: new Set(parsed.ledger || []),
-                fines:  new Set(parsed.fines  || []),
+                users:  new Set(p.users  || []),
+                loans:  new Set(p.loans  || []),
+                ledger: new Set(p.ledger || []),
+                fines:  new Set(p.fines  || []),
             };
-        } catch(e) {
-            return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
-        }
+        } catch(e) { return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() }; }
+    }
+
+    // Supabase se verify karke sirf sach mein missing records pending mein rakho
+    async function _verifyPendingWithSupabase() {
+        if (!supabaseClient || !currentUser || !navigator.onLine) return;
+        try {
+            const loanIds = [..._pendingChanges.loans];
+            const ledgerIds = [..._pendingChanges.ledger];
+            if (loanIds.length === 0 && ledgerIds.length === 0) return;
+
+            // Supabase mein check karo — jo hain unhe pending se hata do
+            if (loanIds.length > 0) {
+                const { data } = await supabaseClient.from('loans').select('id').in('id', loanIds);
+                if (data) { data.forEach(r => _pendingChanges.loans.delete(r.id)); }
+            }
+            if (ledgerIds.length > 0) {
+                const { data } = await supabaseClient.from('ledger').select('id').in('id', ledgerIds);
+                if (data) { data.forEach(r => _pendingChanges.ledger.delete(r.id)); }
+            }
+            _savePending();
+            console.log('[Pending] Verified with Supabase. Remaining:', 
+                _pendingChanges.loans.size, 'loans,', _pendingChanges.ledger.size, 'ledger');
+        } catch(e) { console.warn('[Pending] Verify failed:', e); }
     }
     
     function _savePending() {
@@ -688,7 +710,7 @@
         if (total > 0) {
             btn.innerText = `⬆️ PUSH (${total})`;
             btn.style.background = '#e74c3c'; // laal — attention chahiye
-            btn.title = `${total} records Supabase par save nahi hue — Click karo push karo`;
+            btn.title = `${total} records Supabase par save nahi hue — Click karke push karo`;
         } else {
             btn.innerText = '⬆️ FORCE PUSH';
             btn.style.background = '#e67e22'; // normal orange
@@ -970,14 +992,6 @@
             }
             
             await saveDataToLocal();
-            
-            // FIX: Sync ke baad pending changes clear karo — kyuki data ab match karta hai
-            _pendingChanges.users.clear();
-            _pendingChanges.loans.clear();
-            _pendingChanges.ledger.clear();
-            _pendingChanges.fines.clear();
-            _savePending();  // localStorage bhi update karo
-            
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
             console.log("✅ Sync from Supabase completed");
@@ -1204,7 +1218,7 @@
             saveSession(currentUser);
             showDashboard();
             updateExpiryBadge(null);
-            if (supabaseClient) await syncFromSupabase();
+            if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
             return;
         }
         
@@ -1223,7 +1237,7 @@
                     saveSession(currentUser);
                     showDashboard();
                     updateExpiryBadge(officer.expiry);
-                    if (supabaseClient) await syncFromSupabase();
+                    if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
                     return;
                 } else { 
                     document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; 
@@ -1243,7 +1257,7 @@
         saveSession(currentUser);
         showDashboard();
         updateExpiryBadge(user.expiry);
-        if (supabaseClient) await syncFromSupabase();
+        if (supabaseClient) { await syncFromSupabase(); setTimeout(_verifyPendingWithSupabase, 2000); }
     }
     
     function logout() {
@@ -1845,7 +1859,7 @@
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -2196,12 +2210,12 @@
             const [ledgerId, entry] = payments[i];
             let amountValue = entry.amount_paid || entry.amount || 0;
             tableRows += `<tr id="payment-row-${ledgerId}">
-                <td class="text-center">${i+1}<\/td>
-                <td>${entry.date}<\/td>
-                <td class="text-right">₹${amountValue.toLocaleString('en-IN')}<\/td>
-                <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}<\/td>
-                <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit<\/button><\/td>
-             </tr>`;
+                <td class="text-center">${i+1}</td>
+                <td>${entry.date}</td>
+                <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
+                <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
+                <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button></td>
+            </tr>`;
         }
         const modalHtml = `<div><div style="background:#f5f5f5; padding:10px; margin-bottom:12px; border-radius:6px;">
                 <strong>📋 ग्राहक:</strong> ${loan.user_name}<br>
@@ -2706,7 +2720,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
@@ -3262,13 +3276,8 @@
         });
     }
     
-    // FIX: Click listener - More button dropdown properly handle karo
+    // Click listener sirf ONCE lagao — refreshUI ke bahar
     document.addEventListener('click', function(event) {
-        // Agar click dropdown button ya uske andar kisi element par hua hai to close mat karo
-        if (event.target.closest('.dropdown-icon-btn') || event.target.closest('.action-dropdown-content')) {
-            return; // Dropdown ke andar click hai — close mat karo
-        }
-        // Baaki sab clicks par dropdown close karo
         if (!event.target.closest('.action-dropdown')) {
             document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         }
