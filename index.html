@@ -649,7 +649,6 @@
     let saveTimeout = null;
     let _lastMonthlyCheck = 0;
     let _syncingNow = false;
-    // Changed records tracker — sirf naye/badle records Supabase par jayenge
     // Changed records tracker — localStorage mein save hota hai taaki reload ke baad bhi rahe
     const PENDING_KEY = 'hlb_pending_changes';
     
@@ -689,7 +688,7 @@
         if (total > 0) {
             btn.innerText = `⬆️ PUSH (${total})`;
             btn.style.background = '#e74c3c'; // laal — attention chahiye
-            btn.title = `${total} records Supabase par save nahi hue — Click karke push karo`;
+            btn.title = `${total} records Supabase par save nahi hue — Click karo push karo`;
         } else {
             btn.innerText = '⬆️ FORCE PUSH';
             btn.style.background = '#e67e22'; // normal orange
@@ -971,6 +970,14 @@
             }
             
             await saveDataToLocal();
+            
+            // FIX: Sync ke baad pending changes clear karo — kyuki data ab match karta hai
+            _pendingChanges.users.clear();
+            _pendingChanges.loans.clear();
+            _pendingChanges.ledger.clear();
+            _pendingChanges.fines.clear();
+            _savePending();  // localStorage bhi update karo
+            
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
             console.log("✅ Sync from Supabase completed");
@@ -2189,12 +2196,12 @@
             const [ledgerId, entry] = payments[i];
             let amountValue = entry.amount_paid || entry.amount || 0;
             tableRows += `<tr id="payment-row-${ledgerId}">
-                <td class="text-center">${i+1}</td>
-                <td>${entry.date}</td>
-                <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
-                <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
-                <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button></td>
-            </tr>`;
+                <td class="text-center">${i+1}<\/td>
+                <td>${entry.date}<\/td>
+                <td class="text-right">₹${amountValue.toLocaleString('en-IN')}<\/td>
+                <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}<\/td>
+                <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit<\/button><\/td>
+             </tr>`;
         }
         const modalHtml = `<div><div style="background:#f5f5f5; padding:10px; margin-bottom:12px; border-radius:6px;">
                 <strong>📋 ग्राहक:</strong> ${loan.user_name}<br>
@@ -2699,7 +2706,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
@@ -3255,8 +3262,13 @@
         });
     }
     
-    // Click listener sirf ONCE lagao — refreshUI ke bahar
+    // FIX: Click listener - More button dropdown properly handle karo
     document.addEventListener('click', function(event) {
+        // Agar click dropdown button ya uske andar kisi element par hua hai to close mat karo
+        if (event.target.closest('.dropdown-icon-btn') || event.target.closest('.action-dropdown-content')) {
+            return; // Dropdown ke andar click hai — close mat karo
+        }
+        // Baaki sab clicks par dropdown close karo
         if (!event.target.closest('.action-dropdown')) {
             document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         }
