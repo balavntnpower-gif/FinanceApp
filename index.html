@@ -667,6 +667,44 @@
         } catch(e) { return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() }; }
     }
 
+    // Offline delete ke liye — IDs store karo jo Supabase se delete karni hain
+    const PENDING_DELETES_KEY = 'hlb_pending_deletes';
+    function _loadPendingDeletes() {
+        try {
+            const raw = localStorage.getItem(PENDING_DELETES_KEY);
+            if (!raw) return { ledger: new Set(), loans: new Set() };
+            const p = JSON.parse(raw);
+            return { ledger: new Set(p.ledger || []), loans: new Set(p.loans || []) };
+        } catch(e) { return { ledger: new Set(), loans: new Set() }; }
+    }
+    function _savePendingDeletes() {
+        try {
+            localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify({
+                ledger: [..._pendingDeletes.ledger],
+                loans:  [..._pendingDeletes.loans],
+            }));
+        } catch(e) { console.warn('PendingDeletes save failed:', e); }
+    }
+    async function _processPendingDeletes() {
+        if (!supabaseClient || !navigator.onLine) return;
+        const ledgerIds = [..._pendingDeletes.ledger];
+        const loanIds   = [..._pendingDeletes.loans];
+        if (ledgerIds.length === 0 && loanIds.length === 0) return;
+        console.log(`[PendingDeletes] Processing: ${ledgerIds.length} ledger, ${loanIds.length} loans`);
+        if (ledgerIds.length > 0) {
+            const { error } = await supabaseClient.from('ledger').delete().in('id', ledgerIds);
+            if (!error) { _pendingDeletes.ledger.clear(); console.log(`✅ Deleted ${ledgerIds.length} ledger from Supabase`); }
+            else { console.error('❌ PendingDelete ledger error:', error); }
+        }
+        if (loanIds.length > 0) {
+            const { error } = await supabaseClient.from('loans').delete().in('id', loanIds);
+            if (!error) { _pendingDeletes.loans.clear(); console.log(`✅ Deleted ${loanIds.length} loans from Supabase`); }
+            else { console.error('❌ PendingDelete loans error:', error); }
+        }
+        _savePendingDeletes();
+    }
+    let _pendingDeletes = _loadPendingDeletes();
+
     // Supabase se verify karke sirf sach mein missing records pending mein rakho
     async function _verifyPendingWithSupabase() {
         if (!supabaseClient || !currentUser || !navigator.onLine) return;
@@ -892,7 +930,8 @@
                     _syncingNow = true;
                     
                     try {
-                        // Sirf changed records push karo
+                        // Pehle pending deletes process karo
+                        await _processPendingDeletes();
                         const toSync = {
                             users:  [..._pendingChanges.users].map(id => users[id]).filter(Boolean),
                             loans:  [..._pendingChanges.loans].map(id => loans[id]).filter(Boolean),
@@ -2277,7 +2316,8 @@
         amountCell.innerHTML = `<input type="number" id="edit-amount-${paymentId}" value="${originalAmount}" step="0.01" class="inline-edit-input" style="width:100px;">`;
         dateCell.innerHTML = `<input type="date" id="edit-date-${paymentId}" value="${dateInputValue}" class="inline-date-input">`;
         actionCell.innerHTML = `<button class="inline-save-btn" onclick="saveInlineEdit('${loanId}', '${paymentId}')">💾</button>
-                                <button class="inline-cancel-btn" onclick="cancelInlineEdit('${loanId}', '${paymentId}', ${originalAmount}, '${originalDate}')">✖️</button>`;
+                                <button class="inline-cancel-btn" onclick="cancelInlineEdit('${loanId}', '${paymentId}', ${originalAmount}, '${originalDate}')">✖️</button>
+                                <button class="inline-delete-btn" onclick="deleteInlinePayment('${loanId}', '${paymentId}')" style="background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 6px; font-size:10px; cursor:pointer; margin-left:2px;">🗑️</button>`;
         row.classList.add('editing-row');
     }
     
@@ -2309,6 +2349,46 @@
     }
     
     function cancelInlineEdit(loanId, paymentId, originalAmount, originalDate) { refreshUI(); }
+    
+    async function deleteInlinePayment(loanId, paymentId) {
+        const entry = ledger[paymentId];
+        if (!entry) return;
+        if (!confirm('क्या आप इस पेमेंट को पूरी तरह डिलीट करना चाहते हैं?')) return;
+        try {
+            if (supabaseClient && navigator.onLine) {
+                const { error } = await supabaseClient.from('ledger').delete().eq('id', paymentId);
+                if (error) { console.error("Supabase delete error:", error); }
+                else { console.log(`🗑️ Deleted payment ${paymentId} from Supabase`); }
+            } else {
+                // Offline hai — baad mein delete karne ke liye track karo
+                _pendingDeletes.ledger.add(String(paymentId));
+                _savePendingDeletes();
+                console.log(`[Offline] Queued ledger delete: ${paymentId}`);
+            }
+            if (entry.loan_id && loans[entry.loan_id]) {
+                const loan = loans[entry.loan_id];
+                loan.remaining_amount += entry.amount_paid;
+                if (entry.discount) { loan.total_discount -= entry.discount; loan.total_amount += entry.discount; }
+                if (loan.remaining_amount > 0) loan.status = 'active';
+                loans[entry.loan_id] = loan;
+                if (supabaseClient && navigator.onLine) {
+                    await supabaseClient.from('loans').upsert(loan);
+                } else {
+                    // Offline hai — loan balance update bhi track karo
+                    _pendingChanges.loans.add(String(entry.loan_id));
+                    _savePending();
+                }
+            }
+            delete ledger[paymentId];
+            await saveDataToLocal();
+            document.getElementById('detailsModal').style.display = 'none';
+            refreshUI();
+            showToast("🗑️ पेमेंट डिलीट हो गया!" + (!navigator.onLine ? " (Online होने पर Supabase से भी हटेगा)" : ""), 2500);
+        } catch(err) {
+            console.error("Delete inline payment error:", err);
+            alert("❌ Error: " + err.message);
+        }
+    }
     
     function printLoanDetails(loanId) {
         const loan = loans[loanId];
@@ -2758,7 +2838,7 @@
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
-    // ========== DELETE PAYMENT - FIXED (Supabase से भी delete) ==========
+    // ========== DELETE PAYMENT - FIXED (Offline + Supabase pending delete support) ==========
     async function deletePayment() {
         const ledgerId = document.getElementById('editPaymentId').value;
         const entry = ledger[ledgerId];
@@ -2767,14 +2847,15 @@
         if (!confirm('क्या आप इस पेमेंट को पूरी तरह डिलीट करना चाहते हैं?')) return;
         
         try {
-            // Delete from Supabase first
             if (supabaseClient && navigator.onLine) {
                 const { error } = await supabaseClient.from('ledger').delete().eq('id', ledgerId);
-                if (error) {
-                    console.error("Supabase delete error:", error);
-                } else {
-                    console.log(`🗑️ Deleted payment ${ledgerId} from Supabase`);
-                }
+                if (error) { console.error("Supabase delete error:", error); }
+                else { console.log(`🗑️ Deleted payment ${ledgerId} from Supabase`); }
+            } else {
+                // Offline — baad mein delete karne ke liye track karo
+                _pendingDeletes.ledger.add(String(ledgerId));
+                _savePendingDeletes();
+                console.log(`[Offline] Queued ledger delete: ${ledgerId}`);
             }
             
             // Update loan balance if needed
@@ -2785,14 +2866,13 @@
                     loan.total_discount -= entry.discount;
                     loan.total_amount += entry.discount;
                 }
-                if (loan.remaining_amount > 0) {
-                    loan.status = 'active';
-                }
+                if (loan.remaining_amount > 0) { loan.status = 'active'; }
                 loans[entry.loan_id] = loan;
-                
-                // Update loan in Supabase
                 if (supabaseClient && navigator.onLine) {
                     await supabaseClient.from('loans').upsert(loan);
+                } else {
+                    _pendingChanges.loans.add(String(entry.loan_id));
+                    _savePending();
                 }
             }
             
@@ -2802,7 +2882,7 @@
             await saveDataToLocal();
             refreshUI();
             closeEditPaymentModal();
-            showToast("🗑️ पेमेंट पूरी तरह डिलीट हो गया!", 2000);
+            showToast("🗑️ पेमेंट डिलीट हो गया!" + (!navigator.onLine ? " (Online होने पर Supabase से भी हटेगा)" : ""), 2500);
             
         } catch(err) {
             console.error("Delete payment error:", err);
@@ -3211,9 +3291,11 @@
             if (currentUser && supabaseClient) {
                 const pending = _pendingChanges.users.size + _pendingChanges.loans.size + 
                                 _pendingChanges.ledger.size + _pendingChanges.fines.size;
-                if (pending > 0) {
-                    indicator.textContent = `✅ Online - ${pending} records push ho rahe...`;
-                    saveData(); // pending records push karo
+                const pendingDel = _pendingDeletes.ledger.size + _pendingDeletes.loans.size;
+                if (pending > 0 || pendingDel > 0) {
+                    indicator.textContent = `✅ Online - ${pending + pendingDel} records push ho rahe...`;
+                    _processPendingDeletes(); // pehle deletes
+                    saveData(); // phir pending upserts
                 }
             }
             setTimeout(() => indicator.style.display = 'none', 3000);
