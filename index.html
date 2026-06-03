@@ -2061,6 +2061,9 @@
     function setupSearch() {
         const inp = document.getElementById('searchInput');
         const sug = document.getElementById('searchSuggestions');
+        // Click ya focus par pura text select ho jaye
+        inp.addEventListener('focus', function() { this.select(); });
+        inp.addEventListener('click', function() { this.select(); });
         inp.addEventListener('input', function() {
             const q = this.value.toLowerCase();
             if (!q) { sug.style.display = 'none'; document.getElementById('searchResult').innerHTML = ''; return; }
