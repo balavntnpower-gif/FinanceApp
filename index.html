@@ -1643,11 +1643,15 @@
         const start = parseDisplayDate(startDateStr);
         const till  = tillDateStr ? parseDisplayDate(tillDateStr) : new Date();
         if (!start) return 0;
+        // Rule: Loan dene ke din hi pehla byaj add hota hai
+        // Har mahine same date ko agla byaj
+        // 22 Feb → 22 Feb(1), 22 Mar(2), 22 Apr(3), 22 May(4)
+        // Aaj 3 Jun → 22 Jun nahi aaya → total = 4 ✅
         let months = (till.getFullYear() - start.getFullYear()) * 12;
         months += till.getMonth() - start.getMonth();
-        // Same date ke baad ke din — pura mahina count (loan dene ke din hi byaj add hota hai)
+        // Agar till date >= start date → is mahine ka byaj bhi ban gaya
         if (till.getDate() >= start.getDate()) months += 1;
-        return Math.max(0, months);
+        return Math.max(1, months);
     }
 
     // Loan ke liye monthly byaj amount
@@ -1703,9 +1707,9 @@
         }
 
         loan.byaj_due = Math.round(byaj_due * 100) / 100;
-        loan.total_interest = Math.round(totalMonths * perMonthByaj * 100) / 100; // total byaj jo ab tak bana
-        loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
-        if (loan.remaining_amount < 0) loan.remaining_amount = 0;
+        loan.total_interest = Math.round(totalMonths * perMonthByaj * 100) / 100;
+        // remaining kabhi principal se kam nahi hoga
+        loan.remaining_amount = Math.max(loan.principal, Math.round((loan.principal + loan.byaj_due) * 100) / 100);
         loans[loanId] = loan;
         _pendingChanges.loans.add(loanId);
         console.log(`[Migrate] ${loan.user_name} | months=${totalMonths} | byaj_due=${loan.byaj_due} | total_interest=${loan.total_interest} | remaining=${loan.remaining_amount}`);
@@ -1780,8 +1784,8 @@
                 loan.last_month_check = `${dd}/${mm}/${yyyy}`;
                 loan.total_interest = (loan.total_interest || 0) + (added * monthlyByaj(loan));
                 loan.total_interest = Math.round(loan.total_interest * 100) / 100;
-                loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
-                if (loan.remaining_amount < 0) loan.remaining_amount = 0;
+                // remaining kabhi principal se kam nahi hoga
+                loan.remaining_amount = Math.max(loan.principal, Math.round((loan.principal + loan.byaj_due) * 100) / 100);
                 loans[loanId] = loan;
                 _pendingChanges.loans.add(loanId);
                 updatedCount++;
@@ -1982,8 +1986,8 @@
             if (loan.type === 'month') {
                 // Month loan: byaj_due system — advance allowed
                 loan.byaj_due = Math.round(((loan.byaj_due || 0) - amount) * 100) / 100;
-                loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
-                if (loan.remaining_amount < 0) loan.remaining_amount = 0;
+                // remaining kabhi principal se kam nahi hoga
+                loan.remaining_amount = Math.max(loan.principal, Math.round((loan.principal + loan.byaj_due) * 100) / 100);
             } else {
                 const newRem = oldRemaining - amount;
                 loan.remaining_amount = newRem > 0 ? newRem : 0;
@@ -2300,10 +2304,13 @@
             const byaj = loan.byaj_due || 0;
             const prin = loan.principal || 0;
             const remaining = loan.remaining_amount || 0;
+            const advanceAmt = byaj < 0 ? Math.abs(byaj) : 0;
+            const byajBaki = byaj > 0 ? byaj : 0;
             document.getElementById('paymentRemaining').innerHTML =
                 `<span style="color:#e74c3c;">बाकी: ₹${remaining.toLocaleString('en-IN')}</span>` +
                 `<br><small style="color:#888;">📌 मूलधन: ₹${prin.toLocaleString('en-IN')} | ` +
-                `💰 ब्याज बकाया: <span style="color:${byaj > 0 ? '#e74c3c' : '#27ae60'};">₹${byaj.toLocaleString('en-IN')}</span></small>`;
+                `💰 ब्याज बकाया: <span style="color:#e74c3c;">₹${byajBaki.toLocaleString('en-IN')}</span>` +
+                `${advanceAmt > 0 ? ` | <span style="color:#2980b9;">Advance: ₹${advanceAmt.toLocaleString('en-IN')}</span>` : ''}</small>`;
         } else {
             principalDiv.style.display = 'none';
             document.getElementById('paymentRemaining').innerText = loan.remaining_amount;
@@ -2425,8 +2432,8 @@
         if (loan.type === 'month') {
             // Month loan: pehle byaj_due se ghata, baaki advance mein jaaye
             loan.byaj_due = Math.round(((loan.byaj_due || 0) - amount) * 100) / 100;
-            loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
-            if (loan.remaining_amount < 0) loan.remaining_amount = 0;
+            // remaining kabhi principal se kam nahi hoga
+            loan.remaining_amount = Math.max(loan.principal, Math.round((loan.principal + loan.byaj_due) * 100) / 100);
             // Month loan kabhi auto-complete nahi hoga — sirf muldhan jama par
         } else {
             const newRemaining = oldRemaining - amount;
@@ -2697,7 +2704,11 @@
         <strong>मूलधन (प्रारंभिक):</strong> ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}<br>
         <strong>मूलधन (वर्तमान):</strong> ₹${loan.principal.toLocaleString('en-IN')}<br>
         <strong>ब्याज (जोड़ा गया):</strong> ₹${(loan.total_interest || 0).toLocaleString('en-IN')}<br>
-        ${loan.type === 'month' ? `<strong>ब्याज बकाया:</strong> <span style="color:${(loan.byaj_due||0) > 0 ? '#e74c3c' : '#27ae60'}">₹${(loan.byaj_due || 0).toLocaleString('en-IN')}</span><br>` : ''}
+        ${loan.type === 'month' ? (() => {
+            const bd = loan.byaj_due || 0;
+            if (bd >= 0) return `<strong>ब्याज बकाया:</strong> <span style="color:#e74c3c;">₹${bd.toLocaleString('en-IN')}</span><br>`;
+            else return `<strong>ब्याज बकाया:</strong> <span style="color:#27ae60;">₹0</span><br><strong>Advance:</strong> <span style="color:#2980b9;">₹${Math.abs(bd).toLocaleString('en-IN')}</span><br>`;
+        })() : ''}
         ${loan.total_fine ? `<strong>फाइन:</strong> ₹${loan.total_fine.toLocaleString('en-IN')}<br>` : ''}
         ${loan.total_discount ? `<strong>डिस्काउंट:</strong> ₹${loan.total_discount.toLocaleString('en-IN')}<br>` : ''}
         <hr>
