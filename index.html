@@ -1703,11 +1703,12 @@
         }
 
         loan.byaj_due = Math.round(byaj_due * 100) / 100;
+        loan.total_interest = Math.round(totalMonths * perMonthByaj * 100) / 100; // total byaj jo ab tak bana
         loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
         if (loan.remaining_amount < 0) loan.remaining_amount = 0;
         loans[loanId] = loan;
         _pendingChanges.loans.add(loanId);
-        console.log(`[Migrate] ${loan.user_name} | months=${totalMonths} | byaj_due=${loan.byaj_due} | remaining=${loan.remaining_amount}`);
+        console.log(`[Migrate] ${loan.user_name} | months=${totalMonths} | byaj_due=${loan.byaj_due} | total_interest=${loan.total_interest} | remaining=${loan.remaining_amount}`);
     }
 
     // Sabhi active month loans ka migration (sirf ek baar — byaj_due null/undefined ho to)
@@ -1777,6 +1778,8 @@
                 const mm = String(checkDate.getMonth()+1).padStart(2,'0');
                 const yyyy = checkDate.getFullYear();
                 loan.last_month_check = `${dd}/${mm}/${yyyy}`;
+                loan.total_interest = (loan.total_interest || 0) + (added * monthlyByaj(loan));
+                loan.total_interest = Math.round(loan.total_interest * 100) / 100;
                 loan.remaining_amount = Math.round((loan.principal + loan.byaj_due) * 100) / 100;
                 if (loan.remaining_amount < 0) loan.remaining_amount = 0;
                 loans[loanId] = loan;
@@ -2693,14 +2696,15 @@
         <hr>
         <strong>मूलधन (प्रारंभिक):</strong> ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}<br>
         <strong>मूलधन (वर्तमान):</strong> ₹${loan.principal.toLocaleString('en-IN')}<br>
-        <strong>ब्याज (जोड़ा गया):</strong> ₹${loan.total_interest.toLocaleString('en-IN')}<br>
+        <strong>ब्याज (जोड़ा गया):</strong> ₹${(loan.total_interest || 0).toLocaleString('en-IN')}<br>
+        ${loan.type === 'month' ? `<strong>ब्याज बकाया:</strong> <span style="color:${(loan.byaj_due||0) > 0 ? '#e74c3c' : '#27ae60'}">₹${(loan.byaj_due || 0).toLocaleString('en-IN')}</span><br>` : ''}
         ${loan.total_fine ? `<strong>फाइन:</strong> ₹${loan.total_fine.toLocaleString('en-IN')}<br>` : ''}
         ${loan.total_discount ? `<strong>डिस्काउंट:</strong> ₹${loan.total_discount.toLocaleString('en-IN')}<br>` : ''}
         <hr>
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody>}</div>`;
+        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody></table></div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
