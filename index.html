@@ -564,7 +564,55 @@
 <div id="editPaymentModal" class="modal"><div class="modal-content"><span class="close" onclick="closeEditPaymentModal()">&times;</span><h3>पेमेंट एडिट</h3><input type="hidden" id="editPaymentId"><input type="hidden" id="editLoanId"><div class="form-group"><label>नाम</label><input type="text" id="editCustomerName"></div><div class="form-group"><label>राशि</label><input type="number" id="editAmount" step="0.01"></div><div class="form-group"><label>तारीख</label><input type="date" id="editDate"></div><button onclick="saveEditPayment()">सेव</button><button onclick="deletePayment()" class="danger">डिलीट</button></div></div>
 <div id="overdueModal" class="modal"><div class="modal-content"><span class="close" onclick="closeOverdueModal()">&times;</span><h3>फाइन</h3><input type="hidden" id="overdueLoanId"><p><strong>ग्राहक:</strong> <span id="overdueUserName"></span></p><p><strong>बाकी:</strong> ₹<span id="overdueRemaining"></span></p><div class="form-group"><label>फाइन</label><input type="number" id="overdueAmount" step="0.01" required></div><button onclick="addOverdue()">जोड़ें</button></div></div>
 <div id="discountModal" class="modal"><div class="modal-content"><span class="close" onclick="closeDiscountModal()">&times;</span><h3>डिस्काउंट</h3><input type="hidden" id="discountLoanId"><p><strong>ग्राहक:</strong> <span id="discountUserName"></span></p><p><strong>बाकी:</strong> ₹<span id="discountRemaining"></span></p><div class="form-group"><label>डिस्काउंट</label><input type="number" id="discountGiveAmount" step="0.01" required></div><button onclick="addDiscount()">दें</button></div></div>
-<div id="editLoanModal" class="modal"><div class="modal-content"><span class="close" onclick="closeEditLoanModal()">&times;</span><h3>✏️ लोन संपादन करें</h3><input type="hidden" id="editLoanId"><div class="form-group"><label>ग्राहक</label><span id="editLoanCustomerDisplay" style="font-weight:bold; display:block; padding:6px; background:#ecf0f1; border-radius:5px;"></span></div><div class="form-group"><label>लोन टाइप</label><span id="editLoanTypeDisplay" style="font-weight:bold; display:block; padding:6px; background:#ecf0f1; border-radius:5px;"></span></div><div id="editDayLoanFields" style="display:none;"><div class="form-group"><label>मूलधन (₹)</label><input type="number" id="editPrincipalDay" step="100"></div><div class="form-group"><label>दिन</label><input type="number" id="editDaysDay" step="1"></div></div><div id="editMonthLoanFields" style="display:none;"><div class="form-group"><label>मूलधन (₹)</label><input type="number" id="editPrincipalMonth" step="100"></div><div class="form-group"><label>ब्याज दर (%)</label><input type="number" id="editInterestRateMonth" step="0.01"></div></div><div style="display:flex; gap:5px;"><button onclick="saveEditLoan()" style="flex:1; background:#27ae60;">✅ अपडेट करें</button><button onclick="closeEditLoanModal()" style="flex:1; background:#95a5a6;">रद्द करें</button></div></div></div>
+<div id="editLoanModal" class="modal">
+    <div class="modal-content" style="max-width:460px;">
+        <span class="close" onclick="closeEditLoanModal()">&times;</span>
+        <h3>✏️ लोन संपादन करें</h3>
+        <input type="hidden" id="editLoanId">
+        <div class="form-group">
+            <label>ग्राहक</label>
+            <span id="editLoanCustomerDisplay" style="font-weight:bold; display:block; padding:6px; background:#ecf0f1; border-radius:5px;"></span>
+        </div>
+        <div class="form-group">
+            <label id="editLoanDateLabel">लोन तारीख</label>
+            <input type="date" id="editLoanStartDate">
+        </div>
+        <div class="form-group">
+            <label>लोन टाइप</label>
+            <select id="editLoanType" onchange="toggleEditLoanType()">
+                <option value="day">दिन वाला</option>
+                <option value="month">महीने वाला</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>मूलधन (₹)</label>
+            <input type="number" id="editLoanPrincipal" step="0.01" oninput="calculateEditDayLoan()" onfocus="this.select()">
+        </div>
+        <div id="editDayLoanFields">
+            <div class="form-group">
+                <label>दिन</label>
+                <select id="editLoanDays" onchange="calculateEditDayLoan()">
+                    <option value="60">60 दिन</option>
+                    <option value="80">80 दिन</option>
+                    <option value="100">100 दिन</option>
+                    <option value="120">120 दिन</option>
+                </select>
+            </div>
+            <div class="form-group"><label>ब्याज (20%)</label><input type="text" id="editLoanDayInterest" readonly></div>
+            <div class="form-group"><label>प्रति दिन</label><input type="text" id="editLoanPerDay" readonly></div>
+        </div>
+        <div id="editMonthLoanFields" class="hidden">
+            <div class="form-group">
+                <label>ब्याज दर (%)</label>
+                <input type="number" id="editLoanMonthInterest" step="0.01" onfocus="this.select()">
+            </div>
+        </div>
+        <div style="display:flex; gap:5px; margin-top:10px;">
+            <button onclick="saveEditLoan()" style="flex:1; background:#27ae60;">✅ अपडेट करें</button>
+            <button onclick="closeEditLoanModal()" style="flex:1; background:#95a5a6;">रद्द करें</button>
+        </div>
+    </div>
+</div>
 <div id="detailsModal" class="modal"><div class="modal-content"><span class="close" onclick="closeDetailsModal()">&times;</span><h3>लोन विवरण</h3><div id="detailsModalContent"></div></div></div>
 
 <div id="receiptModal" class="modal">
@@ -1415,6 +1463,8 @@
         refreshUI();
         initMobileTabs();
         setTimeout(() => { checkAndShowReminder(); }, 5000);
+        // Purane loans ko migrate karo - ek baar run hoga
+        setTimeout(() => { migrateLegacyMonthlyLoans(); }, 2000);
     }
     
     // ========== REMINDER FUNCTIONS ==========
@@ -1587,58 +1637,246 @@
         return total;
     }
     
-    function calculateSimpleInterest(loan) {
-        if (!loan.start_date) {
-            return { total_interest: 0, total_amount: loan.principal };
-        }
-        
-        const startParts = loan.start_date.split('/');
-        const startDate = new Date(parseInt(startParts[2]), parseInt(startParts[1]) - 1, parseInt(startParts[0]));
-        const today = new Date();
-        
-        let monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12;
-        monthsDiff += today.getMonth() - startDate.getMonth();
-        if (today.getDate() < startDate.getDate()) monthsDiff--;
-        
-        const totalMonths = Math.max(0, monthsDiff);
-        const totalInterest = loan.principal * (loan.interest_rate / 100) * totalMonths;
-        
-        return {
-            total_interest: Math.round(totalInterest * 100) / 100,
-            total_amount: loan.principal + Math.round(totalInterest * 100) / 100
-        };
+    // Helper: DD/MM/YYYY string se Date object banao
+    function parseDDMMYYYY(dateStr) {
+        if (!dateStr) return null;
+        const parts = dateStr.split('/');
+        if (parts.length !== 3) return null;
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
     }
-    
+
+    // Helper: Date object se DD/MM/YYYY string banao
+    function formatDDMMYYYY(date) {
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+    }
+
+    // Ye function count karta hai ki loan ke liye kitne byaj entries ledger mein hain
+    function getInterestEntriesCount(loanId) {
+        let count = 0;
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.loan_id === loanId && entry.type === 'monthly_interest') count++;
+        }
+        return count;
+    }
+
+    // Ye function loan start date se aaj tak kitne mahine ke byaj ki entries honi chahiye ye count karta hai
+    // Rule: pehla byaj loan date pe hi, phir har mahine ki same date pe
+    function getRequiredInterestMonths(loan) {
+        if (!loan.start_date) return 0;
+        const startDate = parseDDMMYYYY(loan.start_date);
+        if (!startDate) return 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        startDate.setHours(0, 0, 0, 0);
+
+        // Pehla byaj loan date pe hi add hota hai (month 1 = 0 months baad = same date)
+        // Phir har mahine ki same date pe add hota hai
+        // Total byaj entries = months passed + 1 (loan date wali)
+        // e.g. 01-Jan-2026 to 01-Jan-2026 = 1 entry
+        //       01-Jan-2026 to 01-Feb-2026 = 2 entries
+        //       01-Jan-2026 to 15-Jan-2026 = 1 entry (pehla din tha, doosra nahi aaya)
+
+        let count = 0;
+        let checkDate = new Date(startDate); // start date se shuru karo
+
+        while (checkDate <= today) {
+            count++;
+            // Agla month check karo - same day, next month
+            let nextMonth = checkDate.getMonth() + 1;
+            let nextYear = checkDate.getFullYear();
+            if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+            // Same date agla mahine mein
+            let daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+            let nextDay = Math.min(startDate.getDate(), daysInNextMonth);
+            checkDate = new Date(nextYear, nextMonth, nextDay);
+        }
+        return count;
+    }
+
+    // Ye function un tarikhon ki list deta hai jinpe byaj add hona chahiye
+    function getRequiredInterestDates(loan) {
+        if (!loan.start_date) return [];
+        const startDate = parseDDMMYYYY(loan.start_date);
+        if (!startDate) return [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        startDate.setHours(0, 0, 0, 0);
+
+        let dates = [];
+        let checkDate = new Date(startDate);
+
+        while (checkDate <= today) {
+            dates.push(formatDDMMYYYY(checkDate));
+            let nextMonth = checkDate.getMonth() + 1;
+            let nextYear = checkDate.getFullYear();
+            if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+            let daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+            let nextDay = Math.min(startDate.getDate(), daysInNextMonth);
+            checkDate = new Date(nextYear, nextMonth, nextDay);
+        }
+        return dates;
+    }
+
+    // Kaunsi byaj dates pehle se ledger mein hain
+    function getExistingInterestDates(loanId) {
+        let dates = new Set();
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.loan_id === loanId && entry.type === 'monthly_interest') {
+                dates.add(entry.date);
+            }
+        }
+        return dates;
+    }
+
     function checkMonthlyInterest() {
-        console.log("🔄 Checking monthly interest...");
+        console.log("🔄 Checking monthly interest (new logic)...");
         let updatedCount = 0;
-        
+
         for (let loanId of Object.keys(loans)) {
             let loan = loans[loanId];
-            if (loan.type === 'month' && loan.status === 'active') {
-                if (!loan.total_interest) loan.total_interest = 0;
-                if (!loan.total_fine) loan.total_fine = 0;
-                if (!loan.total_discount) loan.total_discount = 0;
-                
-                const result = calculateSimpleInterest(loan);
-                const oldRemaining = loan.remaining_amount;
-                
-                loan.total_interest = result.total_interest;
-                loan.total_amount = result.total_amount;
-                
+            if (loan.type !== 'month' || loan.status !== 'active') continue;
+
+            if (!loan.total_interest) loan.total_interest = 0;
+            if (!loan.total_fine) loan.total_fine = 0;
+            if (!loan.total_discount) loan.total_discount = 0;
+
+            const monthlyInterestAmount = Math.round(loan.principal * (loan.interest_rate / 100) * 100) / 100;
+            const requiredDates = getRequiredInterestDates(loan);
+            const existingDates = getExistingInterestDates(loanId);
+
+            let newInterestAdded = 0;
+            let baseTs = Date.now();
+            let tsOffset = 0;
+
+            for (let dateStr of requiredDates) {
+                if (!existingDates.has(dateStr)) {
+                    // Naya byaj entry add karo
+                    const ledgerId = (baseTs + tsOffset).toString() + '_int_' + loanId;
+                    tsOffset++;
+                    ledger[ledgerId] = {
+                        id: ledgerId,
+                        loan_id: loanId,
+                        user_id: loan.user_id,
+                        user_name: loan.user_name,
+                        officer_id: loan.officer_id,
+                        date: dateStr,
+                        amount_paid: monthlyInterestAmount,
+                        old_balance: null,
+                        new_balance: null,
+                        type: 'monthly_interest',
+                        message: `मासिक ब्याज ${dateStr} - ₹${monthlyInterestAmount}`
+                    };
+                    _pendingChanges.ledger.add(ledgerId);
+                    newInterestAdded += monthlyInterestAmount;
+                    updatedCount++;
+                }
+            }
+
+            if (newInterestAdded > 0) {
+                loan.total_interest = Math.round((loan.total_interest + newInterestAdded) * 100) / 100;
+                loan.total_amount = loan.principal + loan.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
                 const totalNormalPayments = getTotalNormalPayments(loanId);
                 loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
-                
-                if (Math.abs(loan.remaining_amount - oldRemaining) > 0.01) updatedCount++;
                 if (loan.remaining_amount <= 0) loan.status = 'completed';
                 loans[loanId] = loan;
                 _pendingChanges.loans.add(loanId);
             }
         }
+
         _savePending();
         if (updatedCount > 0) {
-            console.log(`✅ Updated ${updatedCount} monthly loans`);
-            saveData(); // monthly loans updated - tracked via loop above
+            console.log(`✅ Added ${updatedCount} new monthly interest entries`);
+            saveData();
+        }
+    }
+
+    // Purane loans ko migrate karo - unki byaj entries banao jo abhi tak nahi bani hain
+    function migrateLegacyMonthlyLoans() {
+        console.log("🔧 Migrating legacy monthly loans...");
+        let migratedCount = 0;
+
+        for (let loanId of Object.keys(loans)) {
+            let loan = loans[loanId];
+            if (loan.type !== 'month') continue;
+
+            // Check karo ki kya is loan mein monthly_interest entries hain
+            const existingCount = getInterestEntriesCount(loanId);
+            if (existingCount > 0) continue; // Pehle se entries hain, skip
+
+            // Pehli baar migration - pichli interest recalculate karo
+            if (loan.status === 'active' || loan.status === 'completed') {
+                // Purani total_interest ko wipe karke nayi entries banao
+                // Par pehle save karo ki purana data safe rahe
+                const monthlyInterestAmount = Math.round(loan.principal * (loan.interest_rate / 100) * 100) / 100;
+                const requiredDates = getRequiredInterestDates(loan);
+
+                // Yadi loan completed hai to start se close date tak dates banao
+                let datesToAdd = requiredDates;
+                if (loan.status === 'completed' && loan.closing_date) {
+                    const closeDate = parseDDMMYYYY(loan.closing_date);
+                    if (closeDate) {
+                        datesToAdd = [];
+                        const startDate = parseDDMMYYYY(loan.start_date);
+                        let checkDate = new Date(startDate);
+                        while (checkDate <= closeDate) {
+                            datesToAdd.push(formatDDMMYYYY(checkDate));
+                            let nextMonth = checkDate.getMonth() + 1;
+                            let nextYear = checkDate.getFullYear();
+                            if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+                            let daysInNext = new Date(nextYear, nextMonth + 1, 0).getDate();
+                            let nextDay = Math.min(startDate.getDate(), daysInNext);
+                            checkDate = new Date(nextYear, nextMonth, nextDay);
+                        }
+                    }
+                }
+
+                let totalInterest = 0;
+                let baseTs = Date.now() + migratedCount * 1000;
+                let tsOffset = 0;
+
+                for (let dateStr of datesToAdd) {
+                    const ledgerId = (baseTs + tsOffset).toString() + '_migint_' + loanId;
+                    tsOffset++;
+                    ledger[ledgerId] = {
+                        id: ledgerId,
+                        loan_id: loanId,
+                        user_id: loan.user_id,
+                        user_name: loan.user_name,
+                        officer_id: loan.officer_id,
+                        date: dateStr,
+                        amount_paid: monthlyInterestAmount,
+                        old_balance: null,
+                        new_balance: null,
+                        type: 'monthly_interest',
+                        message: `मासिक ब्याज ${dateStr} - ₹${monthlyInterestAmount}`
+                    };
+                    _pendingChanges.ledger.add(ledgerId);
+                    totalInterest += monthlyInterestAmount;
+                }
+
+                loan.total_interest = Math.round(totalInterest * 100) / 100;
+                loan.total_amount = loan.principal + loan.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+
+                if (loan.status === 'active') {
+                    const totalNormalPayments = getTotalNormalPayments(loanId);
+                    loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
+                    if (loan.remaining_amount <= 0) loan.status = 'completed';
+                }
+
+                loans[loanId] = loan;
+                _pendingChanges.loans.add(loanId);
+                migratedCount++;
+            }
+        }
+
+        if (migratedCount > 0) {
+            _savePending();
+            saveData();
+            console.log(`✅ Migrated ${migratedCount} legacy monthly loans`);
+            showToast(`✅ ${migratedCount} पुराने लोन नए नियम से अपडेट हो गए!`, 4000);
         }
     }
     
@@ -1882,6 +2120,7 @@
             let displayText = '';
             if (e.type === 'payment') { displayText = `जमा: ₹${e.amount_paid}`; if (e.discount) displayText += ` (${e.discount} छूट)`; }
             else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
+            else if (e.type === 'monthly_interest') { displayText = `📈 मासिक ब्याज जुड़ा: ₹${e.amount_paid}`; }
             else if (e.type === 'principal_closure') { displayText = `🔒 ${e.message || 'मूलधन जमा - लोन बंद'}`; }
             else if (e.type === 'new_loan_from_principal') { displayText = `🆕 ${e.message || 'नया लोन बना'}`; }
             else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
@@ -2135,43 +2374,52 @@
     
     function closePaymentModal() { document.getElementById('paymentModal').style.display = 'none'; }
     
-    function createNewLoanFromPrincipal(oldLoan, newPrincipal, paymentDate, principalPaid) {
+    function createNewLoanFromPrincipal(oldLoan, newLoanAmount, paymentDate, principalPaid) {
         const newLoanId = Date.now().toString();
+        const firstMonthInterest = Math.round(newLoanAmount * (oldLoan.interest_rate / 100) * 100) / 100;
         const newLoan = {
             id: newLoanId, user_id: oldLoan.user_id, user_name: oldLoan.user_name, officer_id: oldLoan.officer_id,
-            type: 'month', principal: newPrincipal, original_principal: newPrincipal, interest_rate: oldLoan.interest_rate,
-            total_interest: 0, total_amount: newPrincipal, remaining_amount: newPrincipal, per_day: null,
+            type: 'month', principal: newLoanAmount, original_principal: newLoanAmount, interest_rate: oldLoan.interest_rate,
+            total_interest: firstMonthInterest, total_amount: newLoanAmount + firstMonthInterest, remaining_amount: newLoanAmount + firstMonthInterest, per_day: null,
             start_date: paymentDate, last_date: null, days: null, status: 'active', last_month_check: paymentDate,
             total_fine: 0, total_discount: 0, previous_loan_id: oldLoan.id, previous_principal: oldLoan.principal,
             previous_loan_closed_date: paymentDate, principal_paid: principalPaid, created_from_principal: true,
-            remark: `🔁 यह लोन पुराने लोन #${oldLoan.id} से मूलधन जमा करके बनाया गया है।\n📌 पुराना मूलधन: ₹${oldLoan.principal.toLocaleString('en-IN')}\n💰 मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')}\n🆕 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📅 पुराना लोन बंद तारीख: ${paymentDate}`
+            remark: `🔁 यह लोन पुराने लोन से बनाया गया है।\n📌 पुराना लोन: ₹${oldLoan.principal.toLocaleString('en-IN')} मूलधन\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n🆕 नया लोन: ₹${newLoanAmount.toLocaleString('en-IN')}\n📅 पुराना लोन बंद: ${paymentDate}`
         };
         loans[newLoanId] = newLoan;
-        const ledgerId = Date.now().toString();
+        // Pehla byaj turant add karo
+        const firstIntId = (Date.now() + 2).toString() + '_int_' + newLoanId;
+        ledger[firstIntId] = {
+            id: firstIntId, loan_id: newLoanId, user_id: oldLoan.user_id, user_name: oldLoan.user_name,
+            officer_id: currentUser.officerId, date: paymentDate, amount_paid: firstMonthInterest,
+            old_balance: null, new_balance: null, type: 'monthly_interest',
+            message: `मासिक ब्याज ${paymentDate} - ₹${firstMonthInterest}`
+        };
+        _pendingChanges.ledger.add(firstIntId);
+        const ledgerId = (Date.now() + 3).toString();
         ledger[ledgerId] = {
             id: ledgerId, loan_id: newLoanId, user_id: oldLoan.user_id, user_name: oldLoan.user_name,
             officer_id: currentUser.officerId, date: paymentDate, amount_paid: principalPaid,
-            old_balance: null, new_balance: newPrincipal, type: 'new_loan_from_principal',
-            message: `पुराने लोन #${oldLoan.id} से ₹${principalPaid.toLocaleString('en-IN')} मूलधन जमा कर नया लोन बना।`,
+            old_balance: null, new_balance: newLoanAmount + firstMonthInterest, type: 'new_loan_from_principal',
+            message: `पुराने लोन #${oldLoan.id} से ₹${principalPaid.toLocaleString('en-IN')} जमा कर नया लोन बना।`,
             previous_loan_id: oldLoan.id, previous_loan_amount: oldLoan.principal,
-            previous_loan_closed_date: paymentDate, remark: `🔁 पुराने लोन से मूलधन जमा करके नया लोन बनाया गया।`
+            previous_loan_closed_date: paymentDate, remark: `🔁 पुराने लोन से नया लोन बनाया गया।`
         };
         return newLoanId;
     }
     
     function closeOldLoanAfterPrincipalPayment(oldLoan, principalPaid, paymentDate) {
         if (oldLoan.status === 'completed') return;
-        const startDate = new Date(oldLoan.start_date.split('/').reverse().join('-'));
-        const closeDate = new Date(paymentDate.split('/').reverse().join('-'));
-        let monthsDiff = (closeDate.getFullYear() - startDate.getFullYear()) * 12;
-        monthsDiff += closeDate.getMonth() - startDate.getMonth();
-        if (closeDate.getDate() < startDate.getDate()) monthsDiff--;
-        const totalMonths = Math.max(0, monthsDiff);
-        const interestTillClose = oldLoan.principal * (oldLoan.interest_rate / 100) * totalMonths;
+        // Total interest = monthly_interest ledger entries ka sum
+        let interestTillClose = 0;
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.loan_id === oldLoan.id && entry.type === 'monthly_interest') {
+                interestTillClose += entry.amount_paid;
+            }
+        }
+        const newLoanPrincipal = Math.max(0, oldLoan.remaining_amount - principalPaid);
         oldLoan.total_interest = Math.round(interestTillClose * 100) / 100;
         oldLoan.total_amount = oldLoan.principal + oldLoan.total_interest + (oldLoan.total_fine || 0) - (oldLoan.total_discount || 0);
-        const totalNormalPayments = getTotalNormalPayments(oldLoan.id);
-        const newLoanPrincipal = oldLoan.principal - principalPaid;
         oldLoan.status = 'completed';
         oldLoan.closing_date = paymentDate;
         oldLoan.principal_paid_on_close = principalPaid;
@@ -2179,15 +2427,15 @@
         oldLoan.closed_by_principal_payment = true;
         oldLoan.new_loan_created = newLoanPrincipal > 0;
         oldLoan.new_loan_principal = newLoanPrincipal;
-        oldLoan.remark = `🔒 यह लोन मूलधन जमा करके बंद किया गया।\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n📅 बंद तारीख: ${paymentDate}\n${newLoanPrincipal > 0 ? `🆕 नया लोन बना: ₹${newLoanPrincipal.toLocaleString('en-IN')} मूलधन पर` : '✅ लोन पूर्ण हुआ'}`;
+        oldLoan.remark = `🔒 यह लोन मूलधन जमा करके बंद किया गया।\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n📅 बंद तारीख: ${paymentDate}\n${newLoanPrincipal > 0 ? `🆕 नया लोन बना: ₹${newLoanPrincipal.toLocaleString('en-IN')} का` : '✅ लोन पूर्ण हुआ'}`;
         loans[oldLoan.id] = oldLoan;
         const ledgerId = Date.now().toString() + "_close";
         ledger[ledgerId] = {
             id: ledgerId, loan_id: oldLoan.id, user_id: oldLoan.user_id, user_name: oldLoan.user_name,
             officer_id: currentUser.officerId, date: paymentDate, amount_paid: principalPaid,
-            old_balance: null, new_balance: 0, type: 'principal_closure',
-            message: `मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')} | पुराना मूलधन: ₹${oldLoan.principal.toLocaleString('en-IN')} | नया मूलधन: ₹${newLoanPrincipal.toLocaleString('en-IN')}`,
-            interest_till_date: Math.round(interestTillClose * 100) / 100, months_completed: totalMonths,
+            old_balance: oldLoan.remaining_amount + principalPaid, new_balance: 0, type: 'principal_closure',
+            message: `मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')} | कुल बाकी था: ₹${(oldLoan.remaining_amount + principalPaid).toLocaleString('en-IN')} | नया लोन: ₹${newLoanPrincipal.toLocaleString('en-IN')}`,
+            interest_till_date: Math.round(interestTillClose * 100) / 100,
             interest_rate: oldLoan.interest_rate, old_principal: oldLoan.principal,
             principal_paid: principalPaid, new_principal: newLoanPrincipal,
             remark: `🔒 मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')}`
@@ -2208,13 +2456,15 @@
         if (isPrincipalPayment && loan.type === 'month') {
             if (amount > loan.principal) { alert(`मूलधन से ज्यादा राशि नहीं डाल सकते!`); return; }
             if (loan.status !== 'active') { alert('यह लोन पहले से ही क्लोज है!'); return; }
-            const newPrincipal = loan.principal - amount;
-            const msg = `⚠️ मूलधन जमा विवरण:\n📌 पुराना मूलधन: ₹${loan.principal.toLocaleString('en-IN')}\n📌 जमा राशि: ₹${amount.toLocaleString('en-IN')}\n📌 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📌 जमा तारीख: ${paymentDate}\n${newPrincipal > 0 ? '✅ नया लोन बनेगा' : '✅ लोन पूरी तरह बंद हो जाएगा'}\nक्या आप जारी रखना चाहते हैं?`;
+            // Naya loan = purana remaining_amount - amount (jo jama kiya)
+            // Agar total_remaining = 12000 aur 10000 jama kiya to naya loan = 2000
+            const remainingAfterPayment = Math.max(0, loan.remaining_amount - amount);
+            const msg = `⚠️ मूलधन जमा विवरण:\n📌 मूलधन: ₹${loan.principal.toLocaleString('en-IN')}\n📌 कुल बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}\n📌 जमा राशि: ₹${amount.toLocaleString('en-IN')}\n📌 नया लोन: ₹${remainingAfterPayment.toLocaleString('en-IN')}\n📌 जमा तारीख: ${paymentDate}\n${remainingAfterPayment > 0 ? '✅ नया लोन बनेगा' : '✅ लोन पूरी तरह बंद हो जाएगा'}\nक्या आप जारी रखना चाहते हैं?`;
             if (!confirm(msg)) return;
             closeOldLoanAfterPrincipalPayment(loan, amount, paymentDate);
-            if (newPrincipal > 0) {
-                createNewLoanFromPrincipal(loan, newPrincipal, paymentDate, amount);
-                showToast(`✅ मूलधन जमा! नया लोन बना: ₹${newPrincipal.toLocaleString('en-IN')}`, 3000);
+            if (remainingAfterPayment > 0) {
+                createNewLoanFromPrincipal(loan, remainingAfterPayment, paymentDate, amount);
+                showToast(`✅ मूलधन जमा! नया लोन बना: ₹${remainingAfterPayment.toLocaleString('en-IN')}`, 3000);
             } else { showToast(`✅ मूलधन जमा! लोन पूर्ण हुआ।`, 3000); }
             saveData('loans', loanId); refreshUI(); closePaymentModal(); return;
         }
@@ -2473,6 +2723,9 @@
         for (let [id, p] of newLoanEntry) all.push({ date: p.date, amount: p.amount_paid, type: '🆕 नया लोन बना', discount: 0, extra: p.message || '' });
         for (let [id, f] of finesList) all.push({ date: f.date, amount: f.amount, type: 'फाइन', discount: 0, extra: '' });
         for (let [id, d] of discounts) all.push({ date: d.date, amount: d.discount, type: 'डिस्काउंट', discount: d.discount, extra: '' });
+        // Monthly interest entries bhi dikhao
+        const interestEntries = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'monthly_interest');
+        for (let [id, ie] of interestEntries) all.push({ date: ie.date, amount: ie.amount_paid, type: '📈 ब्याज जुड़ा', discount: 0, extra: '' });
         all.sort((a,b) => {
             let aParts = a.date.split('/');
             let bParts = b.date.split('/');
@@ -2916,24 +3169,55 @@
         showToast(`✅ फाइन ₹${extra} जुड़ गया!`, 2000);
     }
     
+    function toggleEditLoanType() {
+        const type = document.getElementById('editLoanType').value;
+        if (type === 'day') {
+            document.getElementById('editDayLoanFields').classList.remove('hidden');
+            document.getElementById('editMonthLoanFields').classList.add('hidden');
+            calculateEditDayLoan();
+        } else {
+            document.getElementById('editDayLoanFields').classList.add('hidden');
+            document.getElementById('editMonthLoanFields').classList.remove('hidden');
+        }
+    }
+
+    function calculateEditDayLoan() {
+        const principal = parseFloat(document.getElementById('editLoanPrincipal').value) || 0;
+        const interest = principal * 0.2;
+        document.getElementById('editLoanDayInterest').value = interest.toFixed(2);
+        const days = parseInt(document.getElementById('editLoanDays').value);
+        document.getElementById('editLoanPerDay').value = ((principal + interest) / days).toFixed(2);
+    }
+
     function openEditLoanModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
         document.getElementById('editLoanId').value = loanId;
         document.getElementById('editLoanCustomerDisplay').innerText = loan.user_name;
-        const typeText = loan.type === 'day' ? 'दिन वाला' : 'महीने वाला';
-        document.getElementById('editLoanTypeDisplay').innerText = typeText;
-        
+
+        // Loan start date set karo
+        if (loan.start_date) {
+            const parts = loan.start_date.split('/');
+            if (parts.length === 3) {
+                document.getElementById('editLoanStartDate').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+
+        // Loan type set karo
+        document.getElementById('editLoanType').value = loan.type || 'day';
+
+        // Fields fill karo
+        document.getElementById('editLoanPrincipal').value = loan.principal;
+
         if (loan.type === 'day') {
-            document.getElementById('editDayLoanFields').style.display = 'block';
-            document.getElementById('editMonthLoanFields').style.display = 'none';
-            document.getElementById('editPrincipalDay').value = loan.principal;
-            document.getElementById('editDaysDay').value = loan.days;
+            document.getElementById('editDayLoanFields').classList.remove('hidden');
+            document.getElementById('editMonthLoanFields').classList.add('hidden');
+            document.getElementById('editLoanDays').value = loan.days || 60;
+            calculateEditDayLoan();
         } else {
-            document.getElementById('editDayLoanFields').style.display = 'none';
-            document.getElementById('editMonthLoanFields').style.display = 'block';
-            document.getElementById('editPrincipalMonth').value = loan.principal;
-            document.getElementById('editInterestRateMonth').value = loan.interest_rate;
+            document.getElementById('editDayLoanFields').classList.add('hidden');
+            document.getElementById('editMonthLoanFields').classList.remove('hidden');
+            document.getElementById('editLoanMonthInterest').value = loan.interest_rate;
         }
         document.getElementById('editLoanModal').style.display = 'flex';
     }
@@ -2942,15 +3226,49 @@
         const loanId = document.getElementById('editLoanId').value;
         const loan = loans[loanId];
         if (!loan) return;
-        
-        if (loan.type === 'day') {
-            const newPrincipal = parseFloat(document.getElementById('editPrincipalDay').value);
-            const newDays = parseFloat(document.getElementById('editDaysDay').value);
-            if (!newPrincipal || newPrincipal <= 0 || !newDays || newDays <= 0) { alert('❌ सही मूलधन और दिन संख्या डालें!'); return; }
-            loan.principal = newPrincipal;
-            loan.days = newDays;
+
+        const newType = document.getElementById('editLoanType').value;
+        const newPrincipal = parseFloat(document.getElementById('editLoanPrincipal').value);
+        const startDateInput = document.getElementById('editLoanStartDate').value;
+
+        if (!newPrincipal || newPrincipal <= 0) { alert('❌ सही मूलधन डालें!'); return; }
+
+        let newStartDate = loan.start_date;
+        if (startDateInput) {
+            const p = startDateInput.split('-');
+            newStartDate = `${p[2]}/${p[1]}/${p[0]}`;
+        }
+
+        // Pehle purani monthly_interest entries delete karo (type change ya principal change)
+        const principalChanged = Math.abs(newPrincipal - loan.principal) > 0.01;
+        const dateChanged = newStartDate !== loan.start_date;
+        const typeChanged = newType !== loan.type;
+
+        if (principalChanged || dateChanged || typeChanged) {
+            // Purani monthly_interest ledger entries hata do
+            const oldIntIds = Object.entries(ledger)
+                .filter(([id, e]) => e.loan_id === loanId && e.type === 'monthly_interest')
+                .map(([id]) => id);
+            for (let id of oldIntIds) {
+                if (supabaseClient && navigator.onLine) {
+                    _pendingDeletes.ledger.add(id);
+                }
+                delete ledger[id];
+            }
+            _savePendingDeletes();
+        }
+
+        loan.principal = newPrincipal;
+        loan.start_date = newStartDate;
+        loan.type = newType;
+
+        if (newType === 'day') {
+            const newDays = parseInt(document.getElementById('editLoanDays').value);
+            if (!newDays || newDays <= 0) { alert('❌ सही दिन संख्या डालें!'); return; }
             const totalInterest = newPrincipal * 0.2;
             const totalAmount = newPrincipal + totalInterest;
+            loan.days = newDays;
+            loan.interest_rate = 20;
             loan.total_interest = totalInterest;
             loan.total_amount = totalAmount;
             loan.per_day = totalAmount / newDays;
@@ -2959,12 +3277,38 @@
             if (loan.remaining_amount <= 0) loan.status = 'completed';
             else loan.status = 'active';
         } else {
-            const newPrincipal = parseFloat(document.getElementById('editPrincipalMonth').value);
-            const newInterestRate = parseFloat(document.getElementById('editInterestRateMonth').value);
-            if (!newPrincipal || newPrincipal <= 0 || !newInterestRate || newInterestRate < 0) { alert('❌ सही मूलधन और ब्याज दर डालें!'); return; }
-            loan.principal = newPrincipal;
+            const newInterestRate = parseFloat(document.getElementById('editLoanMonthInterest').value);
+            if (!newInterestRate || newInterestRate < 0) { alert('❌ सही ब्याज दर डालें!'); return; }
             loan.interest_rate = newInterestRate;
+            loan.original_principal = newPrincipal;
+            loan.last_month_check = newStartDate;
+            // Nayi interest entries banao
+            const monthlyInterestAmount = Math.round(newPrincipal * (newInterestRate / 100) * 100) / 100;
+            const requiredDates = getRequiredInterestDates(loan);
+            let totalInterest = 0;
+            let baseTs = Date.now();
+            let tsOffset = 0;
+            for (let dateStr of requiredDates) {
+                const intLedgerId = (baseTs + tsOffset).toString() + '_intedit_' + loanId;
+                tsOffset++;
+                ledger[intLedgerId] = {
+                    id: intLedgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name,
+                    officer_id: loan.officer_id, date: dateStr, amount_paid: monthlyInterestAmount,
+                    old_balance: null, new_balance: null, type: 'monthly_interest',
+                    message: `मासिक ब्याज ${dateStr} - ₹${monthlyInterestAmount}`
+                };
+                _pendingChanges.ledger.add(intLedgerId);
+                totalInterest += monthlyInterestAmount;
+            }
+            loan.total_interest = Math.round(totalInterest * 100) / 100;
+            loan.total_amount = newPrincipal + loan.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+            const totalNormalPayments = getTotalNormalPayments(loanId);
+            loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
         }
+
+        loans[loanId] = loan;
         _pendingChanges.loans.add(loanId); _savePending(); saveData();
         refreshUI();
         closeEditLoanModal();
@@ -3084,13 +3428,24 @@
                 start_date: displayStartDate, days: days, status: 'active', total_fine: 0, total_discount: 0
             };
         } else {
+            const monthInterestRate = parseFloat(document.getElementById('loanMonthInterest').value);
+            const firstMonthInterest = Math.round(principal * (monthInterestRate / 100) * 100) / 100;
             loans[loanId] = {
                 id: loanId, user_id: userId, user_name: users[userId].name, officer_id: currentUser.officerId || currentUser.id,
-                type: 'month', principal, original_principal: principal, interest_rate: parseFloat(document.getElementById('loanMonthInterest').value),
-                total_interest: 0, total_amount: principal, remaining_amount: principal,
+                type: 'month', principal, original_principal: principal, interest_rate: monthInterestRate,
+                total_interest: firstMonthInterest, total_amount: principal + firstMonthInterest, remaining_amount: principal + firstMonthInterest,
                 per_day: null, start_date: displayStartDate, last_date: null, days: null,
                 status: 'active', last_month_check: displayStartDate, total_fine: 0, total_discount: 0
             };
+            // Pehla byaj aaj hi ledger mein add karo (loan date wali entry)
+            const firstIntLedgerId = (Date.now() + 1).toString() + '_int_' + loanId;
+            ledger[firstIntLedgerId] = {
+                id: firstIntLedgerId, loan_id: loanId, user_id: userId, user_name: users[userId].name,
+                officer_id: currentUser.officerId || currentUser.id, date: displayStartDate,
+                amount_paid: firstMonthInterest, old_balance: null, new_balance: null,
+                type: 'monthly_interest', message: `मासिक ब्याज ${displayStartDate} - ₹${firstMonthInterest}`
+            };
+            _pendingChanges.ledger.add(firstIntLedgerId);
         }
         _pendingChanges.loans.add(loanId); _savePending(); saveData();
         refreshUI();
@@ -3301,7 +3656,7 @@
         
         requestAnimationFrame(() => {
             const now = Date.now();
-            if (now - _lastMonthlyCheck > 3600000) {
+            if (now - _lastMonthlyCheck > 60000) { // Har 1 minute mein check
                 checkMonthlyInterest();
                 _lastMonthlyCheck = now;
             }
@@ -3402,6 +3757,20 @@
             document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         }
     });
+
+    // Popup bahar click karne par close ho
+    document.addEventListener('click', function(event) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (modal.style.display === 'flex' && event.target === modal) {
+                modal.style.display = 'none';
+                // Agar new customer modal band hua to reset bhi karo
+                if (modal.id === 'newCustomerModal') closeNewCustomerModal();
+                if (modal.id === 'editLoanModal') closeEditLoanModal();
+                if (modal.id === 'newLoanModal') closeNewLoanModal();
+            }
+        });
+    });
     
     // ========== LOAD DATA ON PAGE START ==========
     async function loadData() {
@@ -3459,6 +3828,13 @@
         window.addEventListener('offline', window.updateOnlineStatus);
         window.updateOnlineStatus();
         loadData();
+        
+        // Input fields par click/focus karne par poora text select ho
+        document.addEventListener('focusin', function(e) {
+            if (e.target.tagName === 'INPUT' && e.target.type !== 'file' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && !e.target.readOnly) {
+                e.target.select();
+            }
+        });
         
         setInterval(() => { if (currentUser) smartRefresh(); }, 60000);
         setInterval(() => { 
