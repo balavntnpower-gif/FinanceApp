@@ -444,14 +444,21 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3 id="backupTitle">बैकअप</h3>
+                    <h3 id="backupTitle">बैकअप & क्लीनअप</h3>
                     <div class="backup-buttons">
                         <button onclick="downloadJSONWithTimestamp()" id="downloadJsonBtn">JSON</button>
                         <button onclick="downloadExcelFile()" id="downloadExcelBtn">Excel</button>
                         <button onclick="document.getElementById('restoreFile').click()" id="restoreBtn">रिस्टोर</button>
                         <input type="file" id="restoreFile" style="display:none" accept=".json" onchange="restoreBackupInside(this)">
                     </div>
-                    <p style="font-size:9px; color:gray; margin-top:2px;" id="restoreInfo">JSON फाइल से डाटा रिस्टोर</p>
+                    <div style="margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px;">
+                        <button onclick="cleanAllDuplicates()" style="width:100%; background:#e74c3c; padding:8px; margin-bottom:5px;" id="cleanAllBtn">
+                            🧹 सभी डुप्लीकेट हटाएं (All Tables)
+                        </button>
+                    </div>
+                    <p style="font-size:9px; color:gray; margin-top:8px;" id="restoreInfo">
+                        💡 "सभी डुप्लीकेट" - Users, Loans, Ledger, Fines (सभी टेबल्स)
+                    </p>
                 </div>
             </div>
 
@@ -697,8 +704,8 @@
     let saveTimeout = null;
     let _lastMonthlyCheck = 0;
     let _syncingNow = false;
-    // Changed records tracker — sirf naye/badle records Supabase par jayenge
-    // Changed records tracker — localStorage mein save hota hai taaki reload ke baad bhi rahe
+    
+    // Changed records tracker
     const PENDING_KEY = 'hlb_pending_changes';
     
     function _loadPending() {
@@ -715,7 +722,6 @@
         } catch(e) { return { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() }; }
     }
 
-    // Offline delete ke liye — IDs store karo jo Supabase se delete karni hain
     const PENDING_DELETES_KEY = 'hlb_pending_deletes';
     function _loadPendingDeletes() {
         try {
@@ -731,6 +737,7 @@
             };
         } catch(e) { return { ledger: new Set(), loans: new Set(), users: new Set(), fines: new Set(), officers: new Set() }; }
     }
+    
     function _savePendingDeletes() {
         try {
             localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify({
@@ -742,7 +749,7 @@
             }));
         } catch(e) { console.warn('PendingDeletes save failed:', e); }
     }
-    // Helper: ek table ke IDs Supabase se delete karo
+    
     async function _deleteFromSupabase(table, ids) {
         if (!ids || ids.length === 0) return true;
         const CHUNK = 50;
@@ -754,6 +761,7 @@
         console.log(`✅ Deleted ${ids.length} from ${table} in Supabase`);
         return true;
     }
+    
     async function _processPendingDeletes() {
         if (!supabaseClient || !navigator.onLine) return;
         const toDelete = {
@@ -773,9 +781,9 @@
         if (await _deleteFromSupabase('officers', toDelete.officers)) _pendingDeletes.officers.clear();
         _savePendingDeletes();
     }
+    
     let _pendingDeletes = _loadPendingDeletes();
 
-    // Supabase se verify karke sirf sach mein missing records pending mein rakho
     async function _verifyPendingWithSupabase() {
         if (!supabaseClient || !currentUser || !navigator.onLine) return;
         try {
@@ -787,13 +795,11 @@
             if (loanIds.length === 0 && ledgerIds.length === 0 && 
                 userIds.length === 0 && fineIds.length === 0) return;
 
-            // Supabase se check karo — jo IDs wahan hain unhe pending se hata do
-            // IMPORTANT: String mein convert karo — type mismatch fix
             if (loanIds.length > 0) {
                 const { data } = await supabaseClient.from('loans').select('id').in('id', loanIds);
                 if (data) data.forEach(r => {
                     _pendingChanges.loans.delete(String(r.id));
-                    _pendingChanges.loans.delete(r.id); // number bhi try karo
+                    _pendingChanges.loans.delete(r.id);
                 });
             }
             if (ledgerIds.length > 0) {
@@ -833,7 +839,7 @@
                 fines:  [..._pendingChanges.fines],
             }));
         } catch(e) { console.warn('Pending save failed:', e); }
-        updatePendingCount(); // button update karo
+        updatePendingCount();
     }
     
     function updatePendingCount() {
@@ -843,17 +849,16 @@
                       _pendingChanges.ledger.size + _pendingChanges.fines.size;
         if (total > 0) {
             btn.innerText = `⬆️ PUSH (${total})`;
-            btn.style.background = '#e74c3c'; // laal — attention chahiye
+            btn.style.background = '#e74c3c';
             btn.title = `${total} records Supabase par save nahi hue — Click karke push karo`;
         } else {
             btn.innerText = '⬆️ FORCE PUSH';
-            btn.style.background = '#e67e22'; // normal orange
+            btn.style.background = '#e67e22';
             btn.title = 'Sab kuch sync hai';
         }
     }
     
     let _pendingChanges = _loadPending();
-    // DOM ready hone ke baad button update karo
     document.addEventListener('DOMContentLoaded', () => updatePendingCount());
     
     const GITHUB_USERS_URL = "users.json";
@@ -979,11 +984,10 @@
     }
     
     async function saveData(changedTable, changedId) {
-        // Changed record track karo
         if (changedTable && changedId) {
             if (_pendingChanges[changedTable]) {
                 _pendingChanges[changedTable].add(changedId);
-                _savePending(); // localStorage mein turant save karo
+                _savePending();
             }
         }
         if (saveTimeout) clearTimeout(saveTimeout);
@@ -1000,7 +1004,6 @@
                     _syncingNow = true;
                     
                     try {
-                        // Pehle pending deletes process karo
                         await _processPendingDeletes();
                         const toSync = {
                             users:  [..._pendingChanges.users].map(id => users[id]).filter(Boolean),
@@ -1011,7 +1014,6 @@
                         
                         let anyError = false;
                         
-                        // Helper: pending IDs sync karo, jo memory mein nahi unhe Supabase se verify karke hatao
                         async function syncTable(table, toSyncRecords, pendingSet, memoryObj) {
                             if (toSyncRecords.length > 0) {
                                 const { error } = await supabaseClient.from(table).upsert(toSyncRecords);
@@ -1019,13 +1021,11 @@
                                 pendingSet.clear();
                                 console.log(`✅ Synced ${toSyncRecords.length} ${table}`);
                             }
-                            // Jo IDs memory mein nahi mili — Supabase se check karke clear karo
                             const missingIds = [...pendingSet].filter(id => !memoryObj[id]);
                             if (missingIds.length > 0) {
                                 console.log(`[syncTable] ${table}: ${missingIds.length} ghost IDs check ho rahe Supabase se...`);
                                 const { data } = await supabaseClient.from(table).select('id').in('id', missingIds);
                                 const foundIds = new Set((data || []).map(r => String(r.id)));
-                                // Supabase mein hain ya nahi — dono cases mein pending se hatao (already synced ya deleted)
                                 missingIds.forEach(id => pendingSet.delete(id));
                                 console.log(`[syncTable] ${table}: ${missingIds.length} ghost IDs cleared`);
                             }
@@ -1034,7 +1034,7 @@
                         await syncTable('loans',  toSync.loans,  _pendingChanges.loans,  loans);
                         await syncTable('ledger', toSync.ledger, _pendingChanges.ledger, ledger);
                         await syncTable('fines',  toSync.fines,  _pendingChanges.fines,  fines);
-                        if (!anyError) { _savePending(); } // localStorage bhi clear karo
+                        if (!anyError) { _savePending(); }
                         
                         updateSyncStatus(anyError ? 'error' : 'synced', anyError ? '⚠️ Partial' : '✅ सिन्क');
                     } catch(syncErr) {
@@ -1090,7 +1090,6 @@
             const officerId = currentUser.role === 'admin' ? null : (currentUser.officerId || currentUser.id);
             const filters = (officerId && currentUser.role !== 'admin') ? { officer_id: officerId } : {};
             
-            // Saari rows fetch karo — 1000 ki limit se zyada bhi
             async function fetchAll(table, tableFilters) {
                 const PAGE = 1000;
                 let allData = [];
@@ -1111,7 +1110,6 @@
                 return allData;
             }
             
-            // Parallel fetch — officers sirf admin ke liye
             const promises = [
                 fetchAll('users',  filters),
                 fetchAll('loans',  filters),
@@ -1153,7 +1151,6 @@
         updateSyncStatus('pending', '🔄 लोड हो रहा...');
         const success = await syncFromSupabase(true);
         if (success) {
-            // Refresh ke baad Supabase se verify karo — sach mein pending kya hai
             await _verifyPendingWithSupabase();
             showToast("✅ डेटा ताज़ा हो गया!", 2000);
         } else {
@@ -1167,7 +1164,6 @@
         updateSyncStatus('pending', '🔄 फोर्स सिन्क...');
         
         try {
-            // Sab clear karo — pending bhi clear hoga (Supabase se fresh data aayega)
             localStorage.clear();
             sessionStorage.clear();
             
@@ -1186,7 +1182,6 @@
             fines = {};
             currentSelectedUserId = null;
             
-            // Pending poora reset karo — Supabase se fresh data aayega
             _pendingChanges = { users: new Set(), loans: new Set(), ledger: new Set(), fines: new Set() };
             localStorage.removeItem(PENDING_KEY);
             
@@ -1204,32 +1199,26 @@
         }
     }
     
-    // ========== FORCE PUSH: Sirf changed/naye records → Supabase ==========
     async function forcePushToSupabase() {
         if (!supabaseClient) { alert('❌ Supabase connect nahi hai!'); return; }
         if (!navigator.onLine) { alert('❌ Internet nahi hai! Online hokar try karein.'); return; }
         if (!currentUser) { alert('❌ Pehle login karein!'); return; }
 
-        // _pendingChanges mein IDs hain — unka data memory se lo
-        // Agar memory mein nahi to poore table se lo (safe fallback)
         const pendingUserIds  = [..._pendingChanges.users];
         const pendingLoanIds  = [..._pendingChanges.loans];
         const pendingLedgerIds = [..._pendingChanges.ledger];
         const pendingFineIds  = [..._pendingChanges.fines];
 
-        // Memory se data nikalo — jo mil jaaye
         const pendingUsers  = pendingUserIds.map(id => users[id]).filter(Boolean);
         const pendingLoans  = pendingLoanIds.map(id => loans[id]).filter(Boolean);
         const pendingLedger = pendingLedgerIds.map(id => ledger[id]).filter(Boolean);
         const pendingFines  = pendingFineIds.map(id => fines[id]).filter(Boolean);
 
-        // Agar koi ID memory mein nahi mila — to poora table push karo (safe)
         const missingUsers  = pendingUserIds.length > 0 && pendingUsers.length === 0;
         const missingLoans  = pendingLoanIds.length > 0 && pendingLoans.length === 0;
         const missingLedger = pendingLedgerIds.length > 0 && pendingLedger.length === 0;
         const missingFines  = pendingFineIds.length > 0 && pendingFines.length === 0;
 
-        // Final data to push
         const finalUsers  = missingUsers  ? Object.values(users)  : pendingUsers;
         const finalLoans  = missingLoans  ? Object.values(loans)  : pendingLoans;
         const finalLedger = missingLedger ? Object.values(ledger) : pendingLedger;
@@ -1270,7 +1259,7 @@
             if (finalLoans.length > 0)  await pushChunked('loans',  finalLoans,  _pendingChanges.loans);
             if (finalLedger.length > 0) await pushChunked('ledger', finalLedger, _pendingChanges.ledger);
             if (finalFines.length > 0)  await pushChunked('fines',  finalFines,  _pendingChanges.fines);
-            _savePending(); // localStorage update karo
+            _savePending();
 
             if (errorCount === 0) {
                 updateSyncStatus('synced', '✅ सिन्क');
@@ -1289,11 +1278,9 @@
         }
     }
 
-    // ========== SMART REFRESH: Sirf zaroori parts update karo ==========
     let _lastRefreshHash = '';
     function smartRefresh() {
         if (!currentUser) return;
-        // Data ka quick fingerprint — agar kuch badla nahi to full refresh skip karo
         const hash = Object.keys(loans).length + '_' + Object.keys(ledger).length + '_' + Object.keys(users).length;
         if (hash === _lastRefreshHash) {
             console.log('[smartRefresh] Data same hai, skip.');
@@ -1463,7 +1450,6 @@
         refreshUI();
         initMobileTabs();
         setTimeout(() => { checkAndShowReminder(); }, 5000);
-        // Purane loans ko migrate karo - ek baar run hoga
         setTimeout(() => { migrateLegacyMonthlyLoans(); }, 2000);
     }
     
@@ -1637,7 +1623,6 @@
         return total;
     }
     
-    // Helper: DD/MM/YYYY string se Date object banao
     function parseDDMMYYYY(dateStr) {
         if (!dateStr) return null;
         const parts = dateStr.split('/');
@@ -1645,7 +1630,6 @@
         return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
     }
 
-    // Helper: Date object se DD/MM/YYYY string banao
     function formatDDMMYYYY(date) {
         const dd = String(date.getDate()).padStart(2, '0');
         const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -1653,7 +1637,6 @@
         return `${dd}/${mm}/${yyyy}`;
     }
 
-    // Ye function count karta hai ki loan ke liye kitne byaj entries ledger mein hain
     function getInterestEntriesCount(loanId) {
         let count = 0;
         for (let [id, entry] of Object.entries(ledger)) {
@@ -1662,8 +1645,6 @@
         return count;
     }
 
-    // Ye function loan start date se aaj tak kitne mahine ke byaj ki entries honi chahiye ye count karta hai
-    // Rule: pehla byaj loan date pe hi, phir har mahine ki same date pe
     function getRequiredInterestMonths(loan) {
         if (!loan.start_date) return 0;
         const startDate = parseDDMMYYYY(loan.start_date);
@@ -1672,23 +1653,14 @@
         today.setHours(0, 0, 0, 0);
         startDate.setHours(0, 0, 0, 0);
 
-        // Pehla byaj loan date pe hi add hota hai (month 1 = 0 months baad = same date)
-        // Phir har mahine ki same date pe add hota hai
-        // Total byaj entries = months passed + 1 (loan date wali)
-        // e.g. 01-Jan-2026 to 01-Jan-2026 = 1 entry
-        //       01-Jan-2026 to 01-Feb-2026 = 2 entries
-        //       01-Jan-2026 to 15-Jan-2026 = 1 entry (pehla din tha, doosra nahi aaya)
-
         let count = 0;
-        let checkDate = new Date(startDate); // start date se shuru karo
+        let checkDate = new Date(startDate);
 
         while (checkDate <= today) {
             count++;
-            // Agla month check karo - same day, next month
             let nextMonth = checkDate.getMonth() + 1;
             let nextYear = checkDate.getFullYear();
             if (nextMonth > 11) { nextMonth = 0; nextYear++; }
-            // Same date agla mahine mein
             let daysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
             let nextDay = Math.min(startDate.getDate(), daysInNextMonth);
             checkDate = new Date(nextYear, nextMonth, nextDay);
@@ -1696,7 +1668,6 @@
         return count;
     }
 
-    // Ye function un tarikhon ki list deta hai jinpe byaj add hona chahiye
     function getRequiredInterestDates(loan) {
         if (!loan.start_date) return [];
         const startDate = parseDDMMYYYY(loan.start_date);
@@ -1720,7 +1691,6 @@
         return dates;
     }
 
-    // Kaunsi byaj dates pehle se ledger mein hain
     function getExistingInterestDates(loanId) {
         let dates = new Set();
         for (let [id, entry] of Object.entries(ledger)) {
@@ -1732,7 +1702,7 @@
     }
 
     function checkMonthlyInterest() {
-        console.log("🔄 Checking monthly interest (new logic)...");
+        console.log("🔄 Checking monthly interest...");
         let updatedCount = 0;
 
         for (let loanId of Object.keys(loans)) {
@@ -1753,7 +1723,6 @@
 
             for (let dateStr of requiredDates) {
                 if (!existingDates.has(dateStr)) {
-                    // Naya byaj entry add karo
                     const ledgerId = (baseTs + tsOffset).toString() + '_int_' + loanId;
                     tsOffset++;
                     ledger[ledgerId] = {
@@ -1793,7 +1762,6 @@
         }
     }
 
-    // Purane loans ko migrate karo - unki byaj entries banao jo abhi tak nahi bani hain
     function migrateLegacyMonthlyLoans() {
         console.log("🔧 Migrating legacy monthly loans...");
         let migratedCount = 0;
@@ -1802,27 +1770,21 @@
             let loan = loans[loanId];
             if (loan.type !== 'month') continue;
 
-            // Check karo ki kya is loan mein monthly_interest entries hain
             const existingCount = getInterestEntriesCount(loanId);
-            if (existingCount > 0) continue; // Pehle se entries hain, skip
+            if (existingCount > 0) continue;
 
-            // Pehli baar migration - pichli interest recalculate karo
             if (loan.status === 'active' || loan.status === 'completed') {
-                // Purani total_interest ko wipe karke nayi entries banao
-                // Par pehle save karo ki purana data safe rahe
                 const monthlyInterestAmount = Math.round(loan.principal * (loan.interest_rate / 100) * 100) / 100;
-                const requiredDates = getRequiredInterestDates(loan);
+                let requiredDates = getRequiredInterestDates(loan);
 
-                // Yadi loan completed hai to start se close date tak dates banao
-                let datesToAdd = requiredDates;
                 if (loan.status === 'completed' && loan.closing_date) {
                     const closeDate = parseDDMMYYYY(loan.closing_date);
                     if (closeDate) {
-                        datesToAdd = [];
+                        requiredDates = [];
                         const startDate = parseDDMMYYYY(loan.start_date);
                         let checkDate = new Date(startDate);
                         while (checkDate <= closeDate) {
-                            datesToAdd.push(formatDDMMYYYY(checkDate));
+                            requiredDates.push(formatDDMMYYYY(checkDate));
                             let nextMonth = checkDate.getMonth() + 1;
                             let nextYear = checkDate.getFullYear();
                             if (nextMonth > 11) { nextMonth = 0; nextYear++; }
@@ -1837,7 +1799,7 @@
                 let baseTs = Date.now() + migratedCount * 1000;
                 let tsOffset = 0;
 
-                for (let dateStr of datesToAdd) {
+                for (let dateStr of requiredDates) {
                     const ledgerId = (baseTs + tsOffset).toString() + '_migint_' + loanId;
                     tsOffset++;
                     ledger[ledgerId] = {
@@ -1946,7 +1908,6 @@
         alert('✅ ऑफिसर का बैकअप डाउनलोड हो गया!');
     }
     
-    // ========== DELETE OFFICER - FIXED (Supabase से भी delete) ==========
     async function deleteOfficer(officerId, officerName) {
         if (!confirm(`क्या आप "${officerName}" को डिलीट करना चाहते हैं?\n\nइस ऑफिसर के सभी ग्राहक, लोन, कलेक्शन भी डिलीट हो जाएंगे!`)) return;
         try {
@@ -1971,7 +1932,6 @@
                 console.log(`[Offline] Queued delete: officer ${officerId} + ${customerIds.length} users + ${loanIds.length} loans`);
             }
 
-            // Local se delete
             ledgerIds.forEach(id   => delete ledger[id]);
             fineIds.forEach(id     => delete fines[id]);
             loanIds.forEach(id     => delete loans[id]);
@@ -2304,25 +2264,21 @@
         showToast(`✅ नया ग्राहक "${name}" बन गया!`, 2000);
     }
     
-    // ========== DELETE CUSTOMER - Full offline support ==========
     async function deleteCustomer(userId, userName) {
         if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
             return;
         }
         try {
-            // Collect all related IDs
             const ledgerIds  = Object.entries(ledger).filter(([id,e]) => e.user_id === userId).map(([id]) => id);
             const fineIds    = Object.entries(fines).filter(([id,f]) => f.user_id === userId).map(([id]) => id);
             const loanIds    = Object.entries(loans).filter(([id,l]) => l.user_id === userId).map(([id]) => id);
 
             if (supabaseClient && navigator.onLine) {
-                // Online: turant Supabase se delete karo
                 await _deleteFromSupabase('ledger', ledgerIds);
                 await _deleteFromSupabase('fines',  fineIds);
                 await _deleteFromSupabase('loans',  loanIds);
                 await _deleteFromSupabase('users',  [userId]);
             } else {
-                // Offline: pending deletes mein track karo
                 ledgerIds.forEach(id => _pendingDeletes.ledger.add(id));
                 fineIds.forEach(id   => _pendingDeletes.fines.add(id));
                 loanIds.forEach(id   => _pendingDeletes.loans.add(id));
@@ -2331,7 +2287,6 @@
                 console.log(`[Offline] Queued delete: user ${userId} + ${loanIds.length} loans + ${ledgerIds.length} ledger + ${fineIds.length} fines`);
             }
 
-            // Local se delete
             ledgerIds.forEach(id => delete ledger[id]);
             fineIds.forEach(id   => delete fines[id]);
             loanIds.forEach(id   => delete loans[id]);
@@ -2387,7 +2342,6 @@
             remark: `🔁 यह लोन पुराने लोन से बनाया गया है।\n📌 पुराना लोन: ₹${oldLoan.principal.toLocaleString('en-IN')} मूलधन\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n🆕 नया लोन: ₹${newLoanAmount.toLocaleString('en-IN')}\n📅 पुराना लोन बंद: ${paymentDate}`
         };
         loans[newLoanId] = newLoan;
-        // Pehla byaj turant add karo
         const firstIntId = (Date.now() + 2).toString() + '_int_' + newLoanId;
         ledger[firstIntId] = {
             id: firstIntId, loan_id: newLoanId, user_id: oldLoan.user_id, user_name: oldLoan.user_name,
@@ -2410,7 +2364,6 @@
     
     function closeOldLoanAfterPrincipalPayment(oldLoan, principalPaid, paymentDate) {
         if (oldLoan.status === 'completed') return;
-        // Total interest = monthly_interest ledger entries ka sum
         let interestTillClose = 0;
         for (let [id, entry] of Object.entries(ledger)) {
             if (entry.loan_id === oldLoan.id && entry.type === 'monthly_interest') {
@@ -2456,8 +2409,6 @@
         if (isPrincipalPayment && loan.type === 'month') {
             if (amount > loan.principal) { alert(`मूलधन से ज्यादा राशि नहीं डाल सकते!`); return; }
             if (loan.status !== 'active') { alert('यह लोन पहले से ही क्लोज है!'); return; }
-            // Naya loan = purana remaining_amount - amount (jo jama kiya)
-            // Agar total_remaining = 12000 aur 10000 jama kiya to naya loan = 2000
             const remainingAfterPayment = Math.max(0, loan.remaining_amount - amount);
             const msg = `⚠️ मूलधन जमा विवरण:\n📌 मूलधन: ₹${loan.principal.toLocaleString('en-IN')}\n📌 कुल बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}\n📌 जमा राशि: ₹${amount.toLocaleString('en-IN')}\n📌 नया लोन: ₹${remainingAfterPayment.toLocaleString('en-IN')}\n📌 जमा तारीख: ${paymentDate}\n${remainingAfterPayment > 0 ? '✅ नया लोन बनेगा' : '✅ लोन पूरी तरह बंद हो जाएगा'}\nक्या आप जारी रखना चाहते हैं?`;
             if (!confirm(msg)) return;
@@ -2608,7 +2559,6 @@
                 if (error) { console.error("Supabase delete error:", error); }
                 else { console.log(`🗑️ Deleted payment ${paymentId} from Supabase`); }
             } else {
-                // Offline hai — baad mein delete karne ke liye track karo
                 _pendingDeletes.ledger.add(String(paymentId));
                 _savePendingDeletes();
                 console.log(`[Offline] Queued ledger delete: ${paymentId}`);
@@ -2622,7 +2572,6 @@
                 if (supabaseClient && navigator.onLine) {
                     await supabaseClient.from('loans').upsert(loan);
                 } else {
-                    // Offline hai — loan balance update bhi track karo
                     _pendingChanges.loans.add(String(entry.loan_id));
                     _savePending();
                 }
@@ -2696,7 +2645,7 @@
         <div class="section-title">▶ कलेक्शन (पेमेंट)</div><div class="two-columns"><div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
         ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col1.length === 0 ? '<tr><td colspan="4">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
-        <div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
+        <div class="payment-column"></table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
         ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4">-<\/td><\/tr>' : ''}</tbody></table></div></div>
         <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div></div>
@@ -2723,7 +2672,6 @@
         for (let [id, p] of newLoanEntry) all.push({ date: p.date, amount: p.amount_paid, type: '🆕 नया लोन बना', discount: 0, extra: p.message || '' });
         for (let [id, f] of finesList) all.push({ date: f.date, amount: f.amount, type: 'फाइन', discount: 0, extra: '' });
         for (let [id, d] of discounts) all.push({ date: d.date, amount: d.discount, type: 'डिस्काउंट', discount: d.discount, extra: '' });
-        // Monthly interest entries bhi dikhao
         const interestEntries = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'monthly_interest');
         for (let [id, ie] of interestEntries) all.push({ date: ie.date, amount: ie.amount_paid, type: '📈 ब्याज जुड़ा', discount: 0, extra: '' });
         all.sort((a,b) => {
@@ -2821,71 +2769,49 @@
             'dec': '12', 'december': '12'
         };
 
-        // Step 1: Puri string se sirf date wala hissa nikalo
-        // "03 May 2026, 04:55 pm"  →  "03 May 2026"
-        // "10-05-2026"             →  "10-05-2026"
         let input = str.toString()
-            .replace(/₹/g, '')           // rupee symbol hata do
-            .replace(/\s*,\s*\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '')  // ", 04:55 pm" hata do
-            .replace(/\s+at\s+\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '') // " at 04:55 pm" hata do
-            .replace(/\s+\d{1,2}:\d{2}:\d{2}/g, '')               // " 04:55:30" hata do
-            .replace(/\s+\d{1,2}:\d{2}/g, '')                     // " 04:55" hata do
+            .replace(/₹/g, '')
+            .replace(/\s*,\s*\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '')
+            .replace(/\s+at\s+\d{1,2}:\d{2}\s*(?:am|pm)?/gi, '')
+            .replace(/\s+\d{1,2}:\d{2}:\d{2}/g, '')
+            .replace(/\s+\d{1,2}:\d{2}/g, '')
             .trim();
 
-        let dd, mm, yyyy;
+        let monthMatch = input.match(/(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/i);
+        if (monthMatch) {
+            let dd = monthMatch[1].padStart(2, '0');
+            let mm = monthNames[monthMatch[2].toLowerCase()];
+            let yyyy = monthMatch[3];
+            if (mm) return `${dd}/${mm}/${yyyy}`;
+        }
 
-        // Format 1: "03 May 2026" ya "3 May 2026" (Excel ki common style)
-        let m1 = input.match(/(\d{1,2})\s+([a-zA-Z]{3,})\s+(\d{4})/i);
+        let m1 = input.match(/([A-Za-z]{3,})\s+(\d{1,2}),?\s+(\d{4})/i);
         if (m1) {
-            dd = m1[1].padStart(2, '0');
-            mm = monthNames[m1[2].toLowerCase()] || null;
-            yyyy = m1[3];
+            let mm = monthNames[m1[1].toLowerCase()];
+            let dd = m1[2].padStart(2, '0');
+            let yyyy = m1[3];
             if (mm) return `${dd}/${mm}/${yyyy}`;
         }
 
-        // Format 2: "May 03 2026" (American style)
-        let m2 = input.match(/([a-zA-Z]{3,})\s+(\d{1,2}),?\s+(\d{4})/i);
-        if (m2) {
-            mm = monthNames[m2[1].toLowerCase()] || null;
-            dd = m2[2].padStart(2, '0');
-            yyyy = m2[3];
-            if (mm) return `${dd}/${mm}/${yyyy}`;
-        }
-
-        // Format 3: "10-05-2026" ya "10/05/2026" (DD-MM-YYYY)
         let m3 = input.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
         if (m3) {
-            dd = m3[1].padStart(2, '0');
-            mm = m3[2].padStart(2, '0');
-            yyyy = m3[3];
-            // Validate karo
+            let dd = m3[1].padStart(2, '0');
+            let mm = m3[2].padStart(2, '0');
+            let yyyy = m3[3];
             let test = new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
             if (test.getDate() == parseInt(dd) && test.getMonth() == parseInt(mm)-1) {
                 return `${dd}/${mm}/${yyyy}`;
             }
         }
 
-        // Format 4: "2026-05-10" (ISO YYYY-MM-DD)
         let m4 = input.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
         if (m4) {
-            yyyy = m4[1];
-            mm = m4[2].padStart(2, '0');
-            dd = m4[3].padStart(2, '0');
+            let yyyy = m4[1];
+            let mm = m4[2].padStart(2, '0');
+            let dd = m4[3].padStart(2, '0');
             return `${dd}/${mm}/${yyyy}`;
         }
 
-        // Format 5: Short year "10-05-26"
-        let m5 = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
-        if (m5) {
-            dd = m5[1].padStart(2, '0');
-            mm = m5[2].padStart(2, '0');
-            let yy = parseInt(m5[3]);
-            yyyy = (yy >= 50 ? 1900 + yy : 2000 + yy).toString();
-            return `${dd}/${mm}/${yyyy}`;
-        }
-
-        // Koi bhi format match nahi hua — aaj ki date
-        console.warn('[parseDateTime] Unrecognized format:', str);
         return getTodayDate();
     }
     
@@ -2894,7 +2820,6 @@
         let text = textarea.value.trim();
         if (!text) { alert('कुछ paste करें!'); return; }
         
-        // Lines split karo — \n ya \r\n dono handle
         const rawLines = text.split(/\r?\n/).filter(l => l.trim());
         bulkParsedRows = [];
         let errors = [];
@@ -2903,15 +2828,11 @@
             let line = rawLines[i].trim();
             if (!line) continue;
             
-            // Tab se split karo pehle (Excel copy karta hai tab-separated)
-            // "₹ 400\t03 May 2026, 04:55 pm"  →  ["₹ 400", "03 May 2026, 04:55 pm"]
             let parts;
             if (line.includes('\t')) {
                 parts = line.split('\t').map(p => p.trim());
             } else {
-                // Tab nahi hai — pehla word amount, baaki date
                 parts = line.split(/\s+/);
-                // ₹ alag se ho sakta hai: ["₹", "400", "03", "May", ...]
                 if (parts[0] === '₹' || parts[0] === 'Rs' || parts[0] === 'rs') {
                     parts = [parts[0] + parts[1], parts.slice(2).join(' ')];
                 } else {
@@ -2933,7 +2854,6 @@
             bulkParsedRows.push({ amount, date: parsedDate });
         }
         
-        // Date ke hisaab se sort karo (purani tarikh pehle)
         bulkParsedRows.sort((a, b) => {
             const toMs = d => { const p = d.split('/'); return new Date(+p[2], +p[1]-1, +p[0]).getTime(); };
             return toMs(a.date) - toMs(b.date);
@@ -2997,17 +2917,14 @@
         for (let i = 0; i < bulkParsedRows.length; i++) {
             const row = bulkParsedRows[i];
             
-            // Amount zero ya negative ho to skip
             if (!row.amount || row.amount <= 0) { skipCount++; continue; }
             
-            // Loan already complete ho gaya ho to baaki rows skip karo
             if (loan.remaining_amount <= 0 || loan.status === 'completed') { 
                 skipCount++; 
                 continue; 
             }
             
             const oldRemaining = loan.remaining_amount;
-            // Agar payment remaining se zyada hai to sirf remaining tak lo
             const actualAmount = Math.min(row.amount, oldRemaining);
             const newRemaining = oldRemaining - actualAmount;
             
@@ -3034,7 +2951,6 @@
         
         loans[loanId] = loan;
         
-        // Sirf changed records track karke save karo
         _pendingChanges.loans.add(loanId);
         changedLedgerIds.forEach(id => _pendingChanges.ledger.add(id));
         _savePending(); saveData();
@@ -3085,11 +3001,10 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
-    // ========== DELETE PAYMENT - FIXED (Offline + Supabase pending delete support) ==========
     async function deletePayment() {
         const ledgerId = document.getElementById('editPaymentId').value;
         const entry = ledger[ledgerId];
@@ -3103,13 +3018,11 @@
                 if (error) { console.error("Supabase delete error:", error); }
                 else { console.log(`🗑️ Deleted payment ${ledgerId} from Supabase`); }
             } else {
-                // Offline — baad mein delete karne ke liye track karo
                 _pendingDeletes.ledger.add(String(ledgerId));
                 _savePendingDeletes();
                 console.log(`[Offline] Queued ledger delete: ${ledgerId}`);
             }
             
-            // Update loan balance if needed
             if (entry.loan_id && loans[entry.loan_id]) {
                 const loan = loans[entry.loan_id];
                 loan.remaining_amount += entry.amount_paid;
@@ -3127,7 +3040,6 @@
                 }
             }
             
-            // Delete from local
             delete ledger[ledgerId];
             
             await saveDataToLocal();
@@ -3195,7 +3107,6 @@
         document.getElementById('editLoanId').value = loanId;
         document.getElementById('editLoanCustomerDisplay').innerText = loan.user_name;
 
-        // Loan start date set karo
         if (loan.start_date) {
             const parts = loan.start_date.split('/');
             if (parts.length === 3) {
@@ -3203,10 +3114,7 @@
             }
         }
 
-        // Loan type set karo
         document.getElementById('editLoanType').value = loan.type || 'day';
-
-        // Fields fill karo
         document.getElementById('editLoanPrincipal').value = loan.principal;
 
         if (loan.type === 'day') {
@@ -3239,13 +3147,11 @@
             newStartDate = `${p[2]}/${p[1]}/${p[0]}`;
         }
 
-        // Pehle purani monthly_interest entries delete karo (type change ya principal change)
         const principalChanged = Math.abs(newPrincipal - loan.principal) > 0.01;
         const dateChanged = newStartDate !== loan.start_date;
         const typeChanged = newType !== loan.type;
 
         if (principalChanged || dateChanged || typeChanged) {
-            // Purani monthly_interest ledger entries hata do
             const oldIntIds = Object.entries(ledger)
                 .filter(([id, e]) => e.loan_id === loanId && e.type === 'monthly_interest')
                 .map(([id]) => id);
@@ -3282,7 +3188,6 @@
             loan.interest_rate = newInterestRate;
             loan.original_principal = newPrincipal;
             loan.last_month_check = newStartDate;
-            // Nayi interest entries banao
             const monthlyInterestAmount = Math.round(newPrincipal * (newInterestRate / 100) * 100) / 100;
             const requiredDates = getRequiredInterestDates(loan);
             let totalInterest = 0;
@@ -3317,7 +3222,6 @@
     
     function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
     
-    // ========== DELETE LOAN - Full offline support ==========
     async function openDeleteLoanModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
@@ -3338,7 +3242,6 @@
                 console.log(`[Offline] Queued delete: loan ${loanId} + ${ledgerIds.length} ledger + ${fineIds.length} fines`);
             }
 
-            // Local se delete
             ledgerIds.forEach(id => delete ledger[id]);
             fineIds.forEach(id   => delete fines[id]);
             delete loans[loanId];
@@ -3437,7 +3340,6 @@
                 per_day: null, start_date: displayStartDate, last_date: null, days: null,
                 status: 'active', last_month_check: displayStartDate, total_fine: 0, total_discount: 0
             };
-            // Pehla byaj aaj hi ledger mein add karo (loan date wali entry)
             const firstIntLedgerId = (Date.now() + 1).toString() + '_int_' + loanId;
             ledger[firstIntLedgerId] = {
                 id: firstIntLedgerId, loan_id: loanId, user_id: userId, user_name: users[userId].name,
@@ -3624,6 +3526,326 @@
         }
     }
     
+    // ========== DUPLICATE CLEANUP FUNCTIONS ==========
+    
+    // Main function - Sabhi tables se duplicates clean karega
+    async function cleanAllDuplicates() {
+        if (!confirm(`⚠️ COMPLETE DUPLICATE CLEANUP\n\nयह फीचर CHECK करेगा और हटाएगा:\n\n📋 USERS: एक ही मोबाइल नंबर वाले डुप्लीकेट\n📋 LOANS: एक ही ग्राहक + मूलधन + तारीख वाले डुप्लीकेट\n💰 LEDGER: एक ही लोन + तारीख + रकम वाले डुप्लीकेट\n⚠️ FINES: एक ही लोन + तारीख + रकम वाले डुप्लीकेट\n\n⚠️ चेतावनी: यह ACTION UNDO नहीं हो सकता!\n\nक्या आप जारी रखना चाहते हैं?`)) {
+            return;
+        }
+        
+        showToast("🔍 सभी टेबल्स में डुप्लीकेट ढूंढे जा रहे हैं...", 2000);
+        
+        let results = {
+            users: { found: 0, deleted: 0, merged: 0 },
+            loans: { found: 0, deleted: 0, merged: 0 },
+            ledger: { found: 0, deleted: 0 },
+            fines: { found: 0, deleted: 0 }
+        };
+        
+        // Clean Users
+        let userResult = await cleanDuplicateUsers();
+        results.users = userResult;
+        
+        // Clean Loans
+        let loanResult = await cleanDuplicateLoans();
+        results.loans = loanResult;
+        
+        // Clean Ledger
+        let ledgerResult = await cleanDuplicateLedger();
+        results.ledger = ledgerResult;
+        
+        // Clean Fines
+        let finesResult = await cleanDuplicateFines();
+        results.fines = finesResult;
+        
+        // Save all changes
+        _savePendingDeletes();
+        _savePending();
+        await saveDataToLocal();
+        
+        // Sync to Supabase if online
+        if (supabaseClient && navigator.onLine) {
+            updateSyncStatus('pending', '🔄 Syncing cleanup to cloud...');
+            await forcePushToSupabase();
+            updateSyncStatus('synced', '✅ Cleaned & Synced');
+        }
+        
+        // Refresh UI
+        refreshUI();
+        
+        // Show final summary
+        let summary = `✅ DUPLICATE CLEANUP COMPLETE!\n\n`;
+        summary += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+        summary += `📋 USERS:\n   • Found: ${results.users.found}\n   • Deleted: ${results.users.deleted}\n   • Merged: ${results.users.merged}\n\n`;
+        summary += `📋 LOANS:\n   • Found: ${results.loans.found}\n   • Deleted: ${results.loans.deleted}\n   • Merged: ${results.loans.merged}\n\n`;
+        summary += `💰 LEDGER:\n   • Found: ${results.ledger.found}\n   • Deleted: ${results.ledger.deleted}\n\n`;
+        summary += `⚠️ FINES:\n   • Found: ${results.fines.found}\n   • Deleted: ${results.fines.deleted}\n\n`;
+        summary += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+        summary += `🔄 All devices will sync automatically!`;
+        
+        alert(summary);
+        showToast(`✅ Cleanup complete! ${results.users.deleted + results.loans.deleted + results.ledger.deleted + results.fines.deleted} duplicates removed.`, 5000);
+    }
+    
+    async function cleanDuplicateUsers() {
+        let mobileMap = new Map();
+        let duplicateUserIds = [];
+        let mergeStats = { found: 0, deleted: 0, merged: 0 };
+        
+        for (let [id, user] of Object.entries(users)) {
+            if (!user.mobile) continue;
+            
+            if (mobileMap.has(user.mobile)) {
+                let existingId = mobileMap.get(user.mobile);
+                duplicateUserIds.push({ id: id, existingId: existingId, user: user });
+                mergeStats.found++;
+            } else {
+                mobileMap.set(user.mobile, id);
+            }
+        }
+        
+        if (duplicateUserIds.length === 0) {
+            console.log("✅ No duplicate users found");
+            return mergeStats;
+        }
+        
+        console.log(`🔍 Found ${duplicateUserIds.length} duplicate users`);
+        
+        for (let dup of duplicateUserIds) {
+            let keepId = dup.existingId;
+            let deleteId = dup.id;
+            let keepUser = users[keepId];
+            let deleteUser = users[deleteId];
+            
+            if (deleteUser.address && !keepUser.address) {
+                keepId = deleteId;
+                deleteId = dup.existingId;
+                keepUser = users[keepId];
+                deleteUser = users[deleteId];
+            } else if (deleteUser.created_date && keepUser.created_date && deleteUser.created_date < keepUser.created_date) {
+                keepId = deleteId;
+                deleteId = dup.existingId;
+                keepUser = users[keepId];
+                deleteUser = users[deleteId];
+            }
+            
+            for (let [loanId, loan] of Object.entries(loans)) {
+                if (loan.user_id === deleteId) {
+                    loan.user_id = keepId;
+                    loan.user_name = keepUser.name;
+                    loans[loanId] = loan;
+                    _pendingChanges.loans.add(loanId);
+                    mergeStats.merged++;
+                }
+            }
+            
+            for (let [ledgerId, entry] of Object.entries(ledger)) {
+                if (entry.user_id === deleteId) {
+                    entry.user_id = keepId;
+                    entry.user_name = keepUser.name;
+                    ledger[ledgerId] = entry;
+                    _pendingChanges.ledger.add(ledgerId);
+                    mergeStats.merged++;
+                }
+            }
+            
+            for (let [fineId, fine] of Object.entries(fines)) {
+                if (fine.user_id === deleteId) {
+                    fine.user_id = keepId;
+                    fine.user_name = keepUser.name;
+                    fines[fineId] = fine;
+                    _pendingChanges.fines.add(fineId);
+                    mergeStats.merged++;
+                }
+            }
+            
+            if (supabaseClient && navigator.onLine) {
+                await supabaseClient.from('users').delete().eq('id', deleteId);
+            } else {
+                _pendingDeletes.users.add(deleteId);
+            }
+            delete users[deleteId];
+            mergeStats.deleted++;
+        }
+        
+        return mergeStats;
+    }
+    
+    async function cleanDuplicateLoans() {
+        let loanKeyMap = new Map();
+        let duplicateLoanIds = [];
+        let mergeStats = { found: 0, deleted: 0, merged: 0 };
+        
+        for (let [id, loan] of Object.entries(loans)) {
+            let key = `${loan.user_id}|${loan.principal}|${loan.start_date}|${loan.type}`;
+            
+            if (loanKeyMap.has(key)) {
+                let existingId = loanKeyMap.get(key);
+                duplicateLoanIds.push({ id: id, existingId: existingId, loan: loan });
+                mergeStats.found++;
+            } else {
+                loanKeyMap.set(key, id);
+            }
+        }
+        
+        if (duplicateLoanIds.length === 0) {
+            console.log("✅ No duplicate loans found");
+            return mergeStats;
+        }
+        
+        console.log(`🔍 Found ${duplicateLoanIds.length} duplicate loans`);
+        
+        for (let dup of duplicateLoanIds) {
+            let keepId = dup.existingId;
+            let deleteId = dup.id;
+            let keepLoan = loans[keepId];
+            let deleteLoan = loans[deleteId];
+            
+            let keepPayments = Object.values(ledger).filter(e => e.loan_id === keepId && e.type === 'payment').length;
+            let deletePayments = Object.values(ledger).filter(e => e.loan_id === deleteId && e.type === 'payment').length;
+            
+            if (deletePayments > keepPayments) {
+                keepId = deleteId;
+                deleteId = dup.existingId;
+                keepLoan = loans[keepId];
+                deleteLoan = loans[deleteId];
+            }
+            
+            for (let [ledgerId, entry] of Object.entries(ledger)) {
+                if (entry.loan_id === deleteId) {
+                    entry.loan_id = keepId;
+                    ledger[ledgerId] = entry;
+                    _pendingChanges.ledger.add(ledgerId);
+                    mergeStats.merged++;
+                }
+            }
+            
+            for (let [fineId, fine] of Object.entries(fines)) {
+                if (fine.loan_id === deleteId) {
+                    fine.loan_id = keepId;
+                    fines[fineId] = fine;
+                    _pendingChanges.fines.add(fineId);
+                    mergeStats.merged++;
+                }
+            }
+            
+            keepLoan.remaining_amount += deleteLoan.remaining_amount;
+            keepLoan.total_amount += deleteLoan.total_amount;
+            if (keepLoan.remaining_amount > 0) keepLoan.status = 'active';
+            loans[keepId] = keepLoan;
+            _pendingChanges.loans.add(keepId);
+            
+            if (supabaseClient && navigator.onLine) {
+                await supabaseClient.from('loans').delete().eq('id', deleteId);
+            } else {
+                _pendingDeletes.loans.add(deleteId);
+            }
+            delete loans[deleteId];
+            mergeStats.deleted++;
+        }
+        
+        return mergeStats;
+    }
+    
+    async function cleanDuplicateLedger() {
+        let ledgerKeyMap = new Map();
+        let duplicateLedgerIds = [];
+        let stats = { found: 0, deleted: 0 };
+        
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (entry.type === 'monthly_interest') continue;
+            
+            let key = `${entry.loan_id || 'no_loan'}|${entry.date}|${entry.amount_paid}|${entry.type}`;
+            
+            if (ledgerKeyMap.has(key)) {
+                duplicateLedgerIds.push(id);
+                stats.found++;
+            } else {
+                ledgerKeyMap.set(key, id);
+            }
+        }
+        
+        if (duplicateLedgerIds.length === 0) {
+            console.log("✅ No duplicate ledger entries found");
+            return stats;
+        }
+        
+        console.log(`🔍 Found ${duplicateLedgerIds.length} duplicate ledger entries`);
+        
+        for (let ledgerId of duplicateLedgerIds) {
+            let entry = ledger[ledgerId];
+            if (!entry) continue;
+            
+            if (entry.loan_id && loans[entry.loan_id] && (entry.type === 'payment' || entry.type === 'direct')) {
+                let loan = loans[entry.loan_id];
+                loan.remaining_amount += entry.amount_paid;
+                if (loan.remaining_amount > 0) loan.status = 'active';
+                loans[entry.loan_id] = loan;
+                _pendingChanges.loans.add(entry.loan_id);
+            }
+            
+            if (supabaseClient && navigator.onLine) {
+                await supabaseClient.from('ledger').delete().eq('id', ledgerId);
+            } else {
+                _pendingDeletes.ledger.add(ledgerId);
+            }
+            delete ledger[ledgerId];
+            stats.deleted++;
+        }
+        
+        return stats;
+    }
+    
+    async function cleanDuplicateFines() {
+        let fineKeyMap = new Map();
+        let duplicateFineIds = [];
+        let stats = { found: 0, deleted: 0 };
+        
+        for (let [id, fine] of Object.entries(fines)) {
+            let key = `${fine.loan_id}|${fine.date}|${fine.amount}`;
+            
+            if (fineKeyMap.has(key)) {
+                duplicateFineIds.push(id);
+                stats.found++;
+            } else {
+                fineKeyMap.set(key, id);
+            }
+        }
+        
+        if (duplicateFineIds.length === 0) {
+            console.log("✅ No duplicate fines found");
+            return stats;
+        }
+        
+        console.log(`🔍 Found ${duplicateFineIds.length} duplicate fines`);
+        
+        for (let fineId of duplicateFineIds) {
+            let fine = fines[fineId];
+            if (!fine) continue;
+            
+            if (fine.loan_id && loans[fine.loan_id]) {
+                let loan = loans[fine.loan_id];
+                loan.total_fine = (loan.total_fine || 0) - fine.amount;
+                loan.total_amount -= fine.amount;
+                loan.remaining_amount -= fine.amount;
+                if (loan.remaining_amount < 0) loan.remaining_amount = 0;
+                loans[fine.loan_id] = loan;
+                _pendingChanges.loans.add(fine.loan_id);
+            }
+            
+            if (supabaseClient && navigator.onLine) {
+                await supabaseClient.from('fines').delete().eq('id', fineId);
+            } else {
+                _pendingDeletes.fines.add(fineId);
+            }
+            delete fines[fineId];
+            stats.deleted++;
+        }
+        
+        return stats;
+    }
+    
     // ========== ONLINE/OFFLINE STATUS ==========
     window.updateOnlineStatus = function() {
         const indicator = document.getElementById('offlineIndicator');
@@ -3631,18 +3853,21 @@
             indicator.textContent = '✅ Online';
             indicator.classList.add('online');
             indicator.style.display = 'block';
-            // Sirf pending push karo — poora sync nahi (heavy hota hai)
+            
+            _processPendingDeletes();
+            
             if (currentUser && supabaseClient) {
                 const pending = _pendingChanges.users.size + _pendingChanges.loans.size + 
                                 _pendingChanges.ledger.size + _pendingChanges.fines.size;
-                const pendingDel = _pendingDeletes.ledger.size + _pendingDeletes.loans.size;
-                if (pending > 0 || pendingDel > 0) {
-                    indicator.textContent = `✅ Online - ${pending + pendingDel} records push ho rahe...`;
-                    _processPendingDeletes(); // pehle deletes
-                    saveData(); // phir pending upserts
+                if (pending > 0) {
+                    indicator.textContent = `✅ Online - ${pending} records push ho rahe...`;
+                    saveData();
+                } else {
+                    setTimeout(() => indicator.style.display = 'none', 3000);
                 }
+            } else {
+                setTimeout(() => indicator.style.display = 'none', 3000);
             }
-            setTimeout(() => indicator.style.display = 'none', 3000);
         } else {
             indicator.textContent = '📡 Offline Mode (Data saved locally)';
             indicator.classList.remove('online');
@@ -3656,12 +3881,11 @@
         
         requestAnimationFrame(() => {
             const now = Date.now();
-            if (now - _lastMonthlyCheck > 60000) { // Har 1 minute mein check
+            if (now - _lastMonthlyCheck > 60000) {
                 checkMonthlyInterest();
                 _lastMonthlyCheck = now;
             }
             
-            // Ledger ko pehle loan_id se group karo — O(n) — nested loop nahi
             const ledgerByLoan = {};
             for (let [id, entry] of Object.entries(ledger)) {
                 if (!ledgerByLoan[entry.loan_id]) ledgerByLoan[entry.loan_id] = [];
@@ -3751,20 +3975,17 @@
         });
     }
     
-    // Click listener sirf ONCE lagao — refreshUI ke bahar
     document.addEventListener('click', function(event) {
         if (!event.target.closest('.action-dropdown')) {
             document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('active'));
         }
     });
 
-    // Popup bahar click karne par close ho
     document.addEventListener('click', function(event) {
         const modals = document.querySelectorAll('.modal');
         modals.forEach(modal => {
             if (modal.style.display === 'flex' && event.target === modal) {
                 modal.style.display = 'none';
-                // Agar new customer modal band hua to reset bhi karo
                 if (modal.id === 'newCustomerModal') closeNewCustomerModal();
                 if (modal.id === 'editLoanModal') closeEditLoanModal();
                 if (modal.id === 'newLoanModal') closeNewLoanModal();
@@ -3772,7 +3993,6 @@
         });
     });
     
-    // ========== LOAD DATA ON PAGE START ==========
     async function loadData() {
         initSupabase();
         try {
@@ -3800,7 +4020,6 @@
                 if (supabaseClient) {
                     setTimeout(async () => {
                         await syncFromSupabase();
-                        // Har device par startup mein ghost IDs auto-clean karo
                         await _verifyPendingWithSupabase();
                         refreshUI();
                     }, 500);
@@ -3814,7 +4033,6 @@
         currentUser = null;
     }
     
-    // ========== EVENT LISTENERS ==========
     document.addEventListener('DOMContentLoaded', function() {
         setupSearch();
         setupCollectionSearch();
@@ -3829,7 +4047,6 @@
         window.updateOnlineStatus();
         loadData();
         
-        // Input fields par click/focus karne par poora text select ho
         document.addEventListener('focusin', function(e) {
             if (e.target.tagName === 'INPUT' && e.target.type !== 'file' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && !e.target.readOnly) {
                 e.target.select();
