@@ -836,6 +836,18 @@
         return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`; 
     }
     
+    // Display ke liye DD-MM-YYYY format (sabhi UI mein yahi dikhega)
+    function getTodayDateDisplay() {
+        let d = new Date();
+        return `${d.getDate().toString().padStart(2,'0')}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getFullYear()}`;
+    }
+    
+    // Internal DD/MM/YYYY ko display DD-MM-YYYY mein badlo
+    function displayDate(dateStr) {
+        if (!dateStr) return '';
+        return dateStr.replace(/\//g, '-');
+    }
+    
     function getTodayDateForInput() { 
         let d = new Date(); 
         return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`; 
@@ -1502,6 +1514,7 @@
         for (let [id, entry] of Object.entries(ledger)) {
             if (entry.type === 'payment' || entry.type === 'direct') {
                 let parts = entry.date.split('/');
+                // DD/MM/YYYY format
                 if (parts.length === 3 && parseInt(parts[1]) === month && parseInt(parts[2]) === year) total += entry.amount_paid;
             }
         }
@@ -1587,25 +1600,74 @@
         return total;
     }
     
+    // DD/MM/YYYY string ko Date object mein convert karo
+    function parseDateDMY(dateStr) {
+        if (!dateStr) return null;
+        const parts = dateStr.split('/');
+        if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        // YYYY-MM-DD format bhi handle karo
+        const parts2 = dateStr.split('-');
+        if (parts2.length === 3 && parts2[0].length === 4) return new Date(parseInt(parts2[0]), parseInt(parts2[1]) - 1, parseInt(parts2[2]));
+        return null;
+    }
+
+    // Date object ko DD/MM/YYYY string mein convert karo
+    function formatDateDMY(d) {
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    }
+
+    // DD/MM/YYYY display format to DD-MM-YYYY display format
+    function slashToDash(dateStr) {
+        if (!dateStr) return '';
+        return dateStr.replace(/\//g, '-');
+    }
+
+    // HTML input ke liye YYYY-MM-DD format
+    function toInputFormat(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('/');
+        if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+        return dateStr;
+    }
+
+    // Loan start date se aaj tak kitne byaj add hone chahiye — original principal par fix byaj
+    // Loan lene wale din bhi 1 byaj add hota hai, phir har mahine usi tarikh ko
     function calculateSimpleInterest(loan) {
         if (!loan.start_date) {
-            return { total_interest: 0, total_amount: loan.principal };
+            return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
         }
         
-        const startParts = loan.start_date.split('/');
-        const startDate = new Date(parseInt(startParts[2]), parseInt(startParts[1]) - 1, parseInt(startParts[0]));
+        const startDate = parseDateDMY(loan.start_date);
+        if (!startDate) return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
+        
         const today = new Date();
+        today.setHours(0,0,0,0);
+        startDate.setHours(0,0,0,0);
         
-        let monthsDiff = (today.getFullYear() - startDate.getFullYear()) * 12;
-        monthsDiff += today.getMonth() - startDate.getMonth();
-        if (today.getDate() < startDate.getDate()) monthsDiff--;
+        // Pehla byaj loan lene ke din hi add hota hai (month 1)
+        // Phir har mahine usi tarikh ko agle byaj add hote hain
+        // Count: kitni byaj dates aaj tak aa chuki hain
         
-        const totalMonths = Math.max(0, monthsDiff);
-        const totalInterest = loan.principal * (loan.interest_rate / 100) * totalMonths;
+        let monthsCount = 0;
+        let checkDate = new Date(startDate);
+        
+        while (checkDate <= today) {
+            monthsCount++;
+            // Agle mahine ki same date
+            const nextMonth = new Date(checkDate);
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            checkDate = nextMonth;
+        }
+        
+        // Original principal par fix byaj (muldhan kabhi nahi badlata)
+        const originalPrincipal = loan.original_principal || loan.principal;
+        const monthlyByaj = originalPrincipal * (loan.interest_rate / 100);
+        const totalInterest = Math.round(monthlyByaj * monthsCount * 100) / 100;
         
         return {
-            total_interest: Math.round(totalInterest * 100) / 100,
-            total_amount: loan.principal + Math.round(totalInterest * 100) / 100
+            total_interest: totalInterest,
+            total_amount: originalPrincipal + totalInterest,
+            months_count: monthsCount
         };
     }
     
@@ -1616,15 +1678,15 @@
         for (let loanId of Object.keys(loans)) {
             let loan = loans[loanId];
             if (loan.type === 'month' && loan.status === 'active') {
-                if (!loan.total_interest) loan.total_interest = 0;
                 if (!loan.total_fine) loan.total_fine = 0;
                 if (!loan.total_discount) loan.total_discount = 0;
                 
                 const result = calculateSimpleInterest(loan);
                 const oldRemaining = loan.remaining_amount;
+                const originalPrincipal = loan.original_principal || loan.principal;
                 
                 loan.total_interest = result.total_interest;
-                loan.total_amount = result.total_amount;
+                loan.total_amount = originalPrincipal + result.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
                 
                 const totalNormalPayments = getTotalNormalPayments(loanId);
                 loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
@@ -1638,7 +1700,7 @@
         _savePending();
         if (updatedCount > 0) {
             console.log(`✅ Updated ${updatedCount} monthly loans`);
-            saveData(); // monthly loans updated - tracked via loop above
+            saveData();
         }
     }
     
@@ -1787,7 +1849,7 @@
         if (activeLoans.length === 0) {
             select.innerHTML = '<option value="new">बिना लोन (कोई एक्टिव लोन नहीं)</option>';
         } else {
-            select.innerHTML = activeLoans.map(([id,l]) => `<option value="${id}">${l.type === 'day' ? 'दिन वाला' : 'महीने वाला'} - तारीख: ${l.start_date} - बाकी: ₹${l.remaining_amount}</option>`).join('');
+            select.innerHTML = activeLoans.map(([id,l]) => `<option value="${id}">${l.type === 'day' ? 'दिन वाला' : 'महीने वाला'} - तारीख: ${displayDate(l.start_date)} - बाकी: ₹${l.remaining_amount}</option>`).join('');
         }
     }
     
@@ -1814,6 +1876,12 @@
             alert(`✅ नया ग्राहक "${name}" बन गया!`);
         }
         const ledgerId = Date.now().toString();
+        
+        // Duplicate check
+        if (isDuplicateEntry(userId, displayDate, amount)) {
+            if (!confirm(`⚠️ इस ग्राहक के लिए ${slashToDash(displayDate)} को ₹${amount} की entry पहले से मौजूद है!\n\nक्या आप फिर भी save करना चाहते हैं?`)) return;
+        }
+        
         if (loanId !== 'new' && loans[loanId]) {
             const loan = loans[loanId];
             const oldRemaining = loan.remaining_amount;
@@ -1887,7 +1955,7 @@
             else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
             let customerDisplay = e.user_name;
             if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
-            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${e.date} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
+            div.innerHTML += `<div class="ledger-item"><div><strong>${customerDisplay}</strong> ने ${displayText}</div><div>📅 ${displayDate(e.date)} | बचा: ${e.new_balance !== null ? '₹' + e.new_balance : 'बिना लोन'}</div><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${e.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${e.loan_id}')">🧾</button>` : ''}</div>`;
         }
     }
     
@@ -1945,7 +2013,7 @@
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${loan.start_date}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${displayDate(loan.start_date)}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -2161,13 +2229,15 @@
     
     function closeOldLoanAfterPrincipalPayment(oldLoan, principalPaid, paymentDate) {
         if (oldLoan.status === 'completed') return;
-        const startDate = new Date(oldLoan.start_date.split('/').reverse().join('-'));
-        const closeDate = new Date(paymentDate.split('/').reverse().join('-'));
+        const startDate = parseDateDMY(oldLoan.start_date);
+        const closeDate = parseDateDMY(paymentDate);
+        if (!startDate || !closeDate) return;
         let monthsDiff = (closeDate.getFullYear() - startDate.getFullYear()) * 12;
         monthsDiff += closeDate.getMonth() - startDate.getMonth();
         if (closeDate.getDate() < startDate.getDate()) monthsDiff--;
         const totalMonths = Math.max(0, monthsDiff);
-        const interestTillClose = oldLoan.principal * (oldLoan.interest_rate / 100) * totalMonths;
+        const originalPrincipal = oldLoan.original_principal || oldLoan.principal;
+        const interestTillClose = originalPrincipal * (oldLoan.interest_rate / 100) * totalMonths;
         oldLoan.total_interest = Math.round(interestTillClose * 100) / 100;
         oldLoan.total_amount = oldLoan.principal + oldLoan.total_interest + (oldLoan.total_fine || 0) - (oldLoan.total_discount || 0);
         const totalNormalPayments = getTotalNormalPayments(oldLoan.id);
@@ -2179,7 +2249,7 @@
         oldLoan.closed_by_principal_payment = true;
         oldLoan.new_loan_created = newLoanPrincipal > 0;
         oldLoan.new_loan_principal = newLoanPrincipal;
-        oldLoan.remark = `🔒 यह लोन मूलधन जमा करके बंद किया गया।\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n📅 बंद तारीख: ${paymentDate}\n${newLoanPrincipal > 0 ? `🆕 नया लोन बना: ₹${newLoanPrincipal.toLocaleString('en-IN')} मूलधन पर` : '✅ लोन पूर्ण हुआ'}`;
+        oldLoan.remark = `🔒 यह लोन मूलधन जमा करके बंद किया गया।\n💰 जमा राशि: ₹${principalPaid.toLocaleString('en-IN')}\n📅 बंद तारीख: ${displayDate(paymentDate)}\n${newLoanPrincipal > 0 ? `🆕 नया लोन बना: ₹${newLoanPrincipal.toLocaleString('en-IN')} मूलधन पर` : '✅ लोन पूर्ण हुआ'}`;
         loans[oldLoan.id] = oldLoan;
         const ledgerId = Date.now().toString() + "_close";
         ledger[ledgerId] = {
@@ -2194,6 +2264,28 @@
         };
     }
     
+    // Duplicate entry check karo - same grahak + same date + same amount
+    function isDuplicateEntry(userId, date, amount, excludeLedgerId) {
+        for (let [id, entry] of Object.entries(ledger)) {
+            if (id === excludeLedgerId) continue;
+            if (entry.user_id === userId && entry.date === date && entry.amount_paid === amount
+                && (entry.type === 'payment' || entry.type === 'direct')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Duplicate loan check - same grahak + same date + same amount
+    function isDuplicateLoan(userId, startDate, principal) {
+        for (let [id, loan] of Object.entries(loans)) {
+            if (loan.user_id === userId && loan.start_date === startDate && loan.principal === principal) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function addPaymentWithDiscount() {
         const loanId = document.getElementById('paymentLoanId').value;
         let amount = parseFloat(document.getElementById('paymentAmount').value);
@@ -2205,11 +2297,16 @@
         let paymentDate = getTodayDate();
         if (dateInput) { const p = dateInput.split('-'); paymentDate = `${p[2]}/${p[1]}/${p[0]}`; }
         
+        // Duplicate check
+        if (isDuplicateEntry(loan.user_id, paymentDate, amount)) {
+            if (!confirm(`⚠️ इस ग्राहक के लिए ${slashToDash(paymentDate)} को ₹${amount} की entry पहले से मौजूद है!\n\nक्या आप फिर भी save करना चाहते हैं?`)) return;
+        }
+        
         if (isPrincipalPayment && loan.type === 'month') {
             if (amount > loan.principal) { alert(`मूलधन से ज्यादा राशि नहीं डाल सकते!`); return; }
             if (loan.status !== 'active') { alert('यह लोन पहले से ही क्लोज है!'); return; }
             const newPrincipal = loan.principal - amount;
-            const msg = `⚠️ मूलधन जमा विवरण:\n📌 पुराना मूलधन: ₹${loan.principal.toLocaleString('en-IN')}\n📌 जमा राशि: ₹${amount.toLocaleString('en-IN')}\n📌 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📌 जमा तारीख: ${paymentDate}\n${newPrincipal > 0 ? '✅ नया लोन बनेगा' : '✅ लोन पूरी तरह बंद हो जाएगा'}\nक्या आप जारी रखना चाहते हैं?`;
+            const msg = `⚠️ मूलधन जमा विवरण:\n📌 पुराना मूलधन: ₹${loan.principal.toLocaleString('en-IN')}\n📌 जमा राशि: ₹${amount.toLocaleString('en-IN')}\n📌 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📌 जमा तारीख: ${slashToDash(paymentDate)}\n${newPrincipal > 0 ? '✅ नया लोन बनेगा' : '✅ लोन पूरी तरह बंद हो जाएगा'}\nक्या आप जारी रखना चाहते हैं?`;
             if (!confirm(msg)) return;
             closeOldLoanAfterPrincipalPayment(loan, amount, paymentDate);
             if (newPrincipal > 0) {
@@ -2235,7 +2332,7 @@
         const ledgerId = Date.now().toString();
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: paymentDate, amount_paid: amount, old_balance: oldRemaining, new_balance: newRemaining > 0 ? newRemaining : 0, type: 'payment', discount: discount };
         _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closePaymentModal();
-        showToast(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${paymentDate})`, 2000);
+        showToast(`💰 ₹${amount.toLocaleString('en-IN')} जमा! (${slashToDash(paymentDate)})`, 2000);
     }
     
     function openDiscountModal(loanId) {
@@ -2282,7 +2379,7 @@
             let amountValue = entry.amount_paid || entry.amount || 0;
             tableRows += `<tr id="payment-row-${ledgerId}">
                 <td class="text-center">${i+1}</td>
-                <td>${entry.date}</td>
+                <td>${displayDate(entry.date)}</td>
                 <td class="text-right">₹${amountValue.toLocaleString('en-IN')}</td>
                 <td class="text-right">${entry.discount ? '₹'+entry.discount.toLocaleString('en-IN') : '-'}</td>
                 <td class="text-center"><button class="small info" onclick="startInlineEdit('${loanId}', '${ledgerId}')">✏️ Edit</button></td>
@@ -2437,17 +2534,17 @@
             .remark-card{background:#fef9e6;padding:6px;margin:6px 0;border-left:3px solid #f39c12;font-size:7pt;white-space:pre-line;}
         </style></head><body><div class="print-container"><div class="header"><h1>${companyName}</h1><div class="powered">${tagline}</div></div>
         <div class="customer-details"><div class="detail-row"><div class="detail-item"><strong>नाम:</strong> ${loan.user_name}</div><div class="detail-item"><strong>मोबाइल:</strong> ${customer.mobile || '-'}</div><div class="detail-item"><strong>पता:</strong> ${customer.address || '-'}</div></div>
-        <div class="detail-row"><div class="detail-item"><strong>Agent:</strong> ${officer.name}</div><div class="detail-item"><strong>लोन तारीख:</strong> ${loan.start_date}</div><div class="detail-item"><strong>ब्याज दर:</strong> ${loan.interest_rate}%</div></div></div>
+        <div class="detail-row"><div class="detail-item"><strong>Agent:</strong> ${officer.name}</div><div class="detail-item"><strong>लोन तारीख:</strong> ${displayDate(loan.start_date)}</div><div class="detail-item"><strong>ब्याज दर:</strong> ${loan.interest_rate}%</div></div></div>
         <div class="loan-summary"><span>📌 मूलधन: ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}</span>
         <span>📈 ब्याज: ₹${loan.total_interest.toLocaleString('en-IN')}</span>${loan.total_fine ? `<span>⚠️ फाइन: ₹${loan.total_fine.toLocaleString('en-IN')}</span>` : ''}
         ${loan.total_discount ? `<span>🏷️ छूट: ₹${loan.total_discount.toLocaleString('en-IN')}</span>` : ''}
         <span>📊 कुल: ₹${loan.total_amount.toLocaleString('en-IN')}</span><span>💵 जमा: ₹${totalPaid.toLocaleString('en-IN')}</span>
         <span><strong>📌 बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')}</strong></span></div>${remarkHtml}
         <div class="section-title">▶ कलेक्शन (पेमेंट)</div><div class="two-columns"><div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
-        ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
+        ${col1.map((t, idx) => `<tr><td class="text-center">${idx+1}<\/td><td class="text-center">${displayDate(t.date)}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col1.length === 0 ? '<tr><td colspan="4">कोई लेन-देन नहीं<\/td><\/tr>' : ''}</tbody></table></div>
         <div class="payment-column"><table><thead><tr><th>#</th><th>तारीख</th><th>प्रकार</th><th>राशि</th></tr></thead><tbody>
-        ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${t.date}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
+        ${col2.map((t, idx) => `<tr><td class="text-center">${col1.length+idx+1}<\/td><td class="text-center">${displayDate(t.date)}<\/td><td class="text-center">${t.type}<\/td><td class="text-right">₹${t.amount.toLocaleString('en-IN')}<\/td><\/tr>`).join('')}
         ${col2.length === 0 && col1.length > 0 ? '<tr><td colspan="4">-<\/td><\/tr>' : ''}</tbody></table></div></div>
         <div class="footer">प्रिंट तिथि: ${getTodayDate()} | ${companyName}</div></div>
         <script>window.onload = function(){window.print();setTimeout(function(){window.close();},800);};<\/script></body></html>`;
@@ -2480,7 +2577,7 @@
         });
         let rows = '';
         for (let i = 0; i < all.length; i++) {
-            rows += `<tr style="text-align:center"><td>${i+1}<\/td><td>${all[i].date}<\/td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}<\/td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}<\/td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}<\/td><\/tr>`;
+            rows += `<tr style="text-align:center"><td>${i+1}<\/td><td>${displayDate(all[i].date)}<\/td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}<\/td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}<\/td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}<\/td><\/tr>`;
         }
         let remarkHtml = loan.remark ? `<div class="remark-card"><strong>📝 Remark:</strong><br>${loan.remark}</div>` : '';
         const modalHtml = `<div><div style="background:#f5f5f5;padding:6px;margin-bottom:8px">
@@ -2488,7 +2585,7 @@
         <strong>मोबाइल:</strong> ${customer.mobile || '-'}<br>
         <strong>पता:</strong> ${customer.address || '-'}<br>
         <strong>Collection Agent:</strong> ${officer.name}<br>
-        <strong>लोन तारीख:</strong> ${loan.start_date}<br>
+        <strong>लोन तारीख:</strong> ${displayDate(loan.start_date)}<br>
         <strong>ब्याज दर:</strong> ${loan.interest_rate}%<br>
         ${remarkHtml}
         <hr>
@@ -2919,59 +3016,109 @@
     function openEditLoanModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
-        document.getElementById('editLoanId').value = loanId;
-        document.getElementById('editLoanCustomerDisplay').innerText = loan.user_name;
-        const typeText = loan.type === 'day' ? 'दिन वाला' : 'महीने वाला';
-        document.getElementById('editLoanTypeDisplay').innerText = typeText;
-        
+
+        // Modal title change karo
+        document.getElementById('newLoanTitle').innerText = '✏️ लोन संपादन';
+
+        // Customer search/dropdown hide karo — edit mein customer nahi badlega
+        const searchBox = document.querySelector('#newLoanModal .loan-search-box');
+        if (searchBox) searchBox.style.display = 'none';
+
+        // Loan type readonly banao — type nahi badlega
+        const loanTypeSelect = document.getElementById('loanType');
+        loanTypeSelect.value = loan.type;
+        loanTypeSelect.disabled = true;
+
+        // Date pre-fill (YYYY-MM-DD format input ke liye)
+        document.getElementById('loanStartDate').value = toInputFormat(loan.start_date);
+
+        // Muldhan pre-fill
+        document.getElementById('loanPrincipal').value = loan.principal;
+
         if (loan.type === 'day') {
-            document.getElementById('editDayLoanFields').style.display = 'block';
-            document.getElementById('editMonthLoanFields').style.display = 'none';
-            document.getElementById('editPrincipalDay').value = loan.principal;
-            document.getElementById('editDaysDay').value = loan.days;
+            document.getElementById('dayOptionsDiv').classList.remove('hidden');
+            document.getElementById('monthOptionsDiv').classList.add('hidden');
+            document.getElementById('loanDays').value = loan.days || 100;
+            calculateDayLoan();
         } else {
-            document.getElementById('editDayLoanFields').style.display = 'none';
-            document.getElementById('editMonthLoanFields').style.display = 'block';
-            document.getElementById('editPrincipalMonth').value = loan.principal;
-            document.getElementById('editInterestRateMonth').value = loan.interest_rate;
+            document.getElementById('dayOptionsDiv').classList.add('hidden');
+            document.getElementById('monthOptionsDiv').classList.remove('hidden');
+            document.getElementById('loanMonthInterest').value = loan.interest_rate;
         }
-        document.getElementById('editLoanModal').style.display = 'flex';
+
+        // Submit button ko saveEditLoan se link karo
+        const btn = document.getElementById('createLoanBtn');
+        btn.innerText = '💾 लोन अपडेट करें';
+        btn.onclick = function() { saveEditLoan(loanId); };
+
+        // Ek info band dikhao — kaun sa loan edit ho raha hai
+        let infoDiv = document.getElementById('editLoanInfoBanner');
+        if (!infoDiv) {
+            infoDiv = document.createElement('div');
+            infoDiv.id = 'editLoanInfoBanner';
+            infoDiv.style.cssText = 'background:#e8f5e9;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:12px;border-left:3px solid #27ae60;';
+            document.getElementById('newLoanTitle').after(infoDiv);
+        }
+        infoDiv.innerHTML = `👤 <strong>${loan.user_name}</strong> | ${loan.type === 'day' ? 'दिन वाला' : 'महीने वाला'} लोन`;
+        infoDiv.style.display = 'block';
+
+        document.getElementById('newLoanModal').style.display = 'flex';
     }
-    
-    function saveEditLoan() {
-        const loanId = document.getElementById('editLoanId').value;
+
+    function saveEditLoan(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
-        
+
+        const principal = parseFloat(document.getElementById('loanPrincipal').value);
+        let startDateStr = document.getElementById('loanStartDate').value;
+        if (!startDateStr) { alert('तारीख डालें!'); return; }
+        let parts = startDateStr.split('-');
+        let newStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+
         if (loan.type === 'day') {
-            const newPrincipal = parseFloat(document.getElementById('editPrincipalDay').value);
-            const newDays = parseFloat(document.getElementById('editDaysDay').value);
-            if (!newPrincipal || newPrincipal <= 0 || !newDays || newDays <= 0) { alert('❌ सही मूलधन और दिन संख्या डालें!'); return; }
-            loan.principal = newPrincipal;
+            const newDays = parseInt(document.getElementById('loanDays').value);
+            if (!principal || principal <= 0 || !newDays || newDays <= 0) { alert('❌ सही मूलधन और दिन डालें!'); return; }
+            const totalInterest = principal * 0.2;
+            const totalAmount = principal + totalInterest;
+            const perDay = totalAmount / newDays;
+            const totalPayments = Object.values(ledger).filter(e => e.loan_id === loanId && e.type === 'payment').reduce((sum, e) => sum + e.amount_paid, 0);
+            loan.principal = principal;
+            loan.original_principal = principal;
             loan.days = newDays;
-            const totalInterest = newPrincipal * 0.2;
-            const totalAmount = newPrincipal + totalInterest;
             loan.total_interest = totalInterest;
             loan.total_amount = totalAmount;
-            loan.per_day = totalAmount / newDays;
-            const totalPayments = Object.values(ledger).filter(e => e.loan_id === loanId && e.type === 'payment').reduce((sum, e) => sum + e.amount_paid, 0);
+            loan.per_day = perDay;
+            loan.start_date = newStartDate;
             loan.remaining_amount = Math.max(0, totalAmount - totalPayments);
             if (loan.remaining_amount <= 0) loan.status = 'completed';
             else loan.status = 'active';
         } else {
-            const newPrincipal = parseFloat(document.getElementById('editPrincipalMonth').value);
-            const newInterestRate = parseFloat(document.getElementById('editInterestRateMonth').value);
-            if (!newPrincipal || newPrincipal <= 0 || !newInterestRate || newInterestRate < 0) { alert('❌ सही मूलधन और ब्याज दर डालें!'); return; }
-            loan.principal = newPrincipal;
+            const newInterestRate = parseFloat(document.getElementById('loanMonthInterest').value);
+            if (!principal || principal <= 0 || !newInterestRate || newInterestRate < 0) { alert('❌ सही मूलधन और ब्याज दर डालें!'); return; }
+            loan.principal = principal;
+            loan.original_principal = principal;
             loan.interest_rate = newInterestRate;
+            loan.start_date = newStartDate;
+            // Naye niyam se recalculate
+            const result = calculateSimpleInterest(loan);
+            loan.total_interest = result.total_interest;
+            loan.total_amount = principal + result.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+            const totalPayments = getTotalNormalPayments(loanId);
+            loan.remaining_amount = Math.max(0, loan.total_amount - totalPayments);
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            else loan.status = 'active';
         }
-        _pendingChanges.loans.add(loanId); _savePending(); saveData();
+
+        loans[loanId] = loan;
+        _pendingChanges.loans.add(loanId);
+        _savePending();
+        saveData();
         refreshUI();
-        closeEditLoanModal();
+        closeNewLoanModal();
         showToast("✅ लोन अपडेट हो गया!", 2000);
     }
-    
-    function closeEditLoanModal() { document.getElementById('editLoanModal').style.display = 'none'; }
+
+    function closeEditLoanModal() { closeNewLoanModal(); }
     
     // ========== DELETE LOAN - Full offline support ==========
     async function openDeleteLoanModal(loanId) {
@@ -3047,6 +3194,18 @@
     }
     
     function openNewLoanModal() {
+        // Pehle clean state ensure karo
+        document.getElementById('newLoanTitle').innerText = '➕ नया लोन';
+        const searchBox = document.querySelector('#newLoanModal .loan-search-box');
+        if (searchBox) searchBox.style.display = '';
+        document.getElementById('loanType').disabled = false;
+        document.getElementById('loanType').value = 'day';
+        toggleLoanType();
+        const btn = document.getElementById('createLoanBtn');
+        btn.innerText = '✅ लोन बनाएं';
+        btn.onclick = createLoan;
+        const infoDiv = document.getElementById('editLoanInfoBanner');
+        if (infoDiv) infoDiv.style.display = 'none';
         document.getElementById('loanStartDate').value = getTodayDateForInput();
         calculateDayLoan();
         const select = document.getElementById('loanCustomerSelect');
@@ -3058,7 +3217,25 @@
         document.getElementById('newLoanModal').style.display = 'flex';
     }
     
-    function closeNewLoanModal() { document.getElementById('newLoanModal').style.display = 'none'; }
+    function closeNewLoanModal() {
+        document.getElementById('newLoanModal').style.display = 'none';
+        // Edit mode ka state reset karo
+        document.getElementById('newLoanTitle').innerText = '➕ नया लोन';
+        const searchBox = document.querySelector('#newLoanModal .loan-search-box');
+        if (searchBox) searchBox.style.display = '';
+        const loanTypeSelect = document.getElementById('loanType');
+        loanTypeSelect.disabled = false;
+        loanTypeSelect.value = 'day';
+        toggleLoanType();
+        const btn = document.getElementById('createLoanBtn');
+        btn.innerText = '✅ लोन बनाएं';
+        btn.onclick = createLoan;
+        const infoDiv = document.getElementById('editLoanInfoBanner');
+        if (infoDiv) infoDiv.style.display = 'none';
+        // Customer selection reset
+        document.getElementById('loanSearchInput').value = '';
+        selectedLoanCustomerId = null;
+    }
     
     function createLoan() {
         let userId = selectedLoanCustomerId;
@@ -3072,6 +3249,11 @@
         let displayStartDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
         const loanId = Date.now().toString();
         
+        // Duplicate loan check
+        if (isDuplicateLoan(userId, displayStartDate, principal)) {
+            if (!confirm(`⚠️ इस ग्राहक का ${slashToDash(displayStartDate)} को ₹${principal} का लोन पहले से मौजूद है!\n\nक्या आप फिर भी नया लोन बनाना चाहते हैं?`)) return;
+        }
+        
         if (type === 'day') {
             const days = parseInt(document.getElementById('loanDays').value);
             const totalInterest = principal * 0.2;
@@ -3084,10 +3266,16 @@
                 start_date: displayStartDate, days: days, status: 'active', total_fine: 0, total_discount: 0
             };
         } else {
+            const interestRate = parseFloat(document.getElementById('loanMonthInterest').value);
+            // Loan lene ke din pehla byaj bhi add hota hai
+            const monthlyByaj = principal * (interestRate / 100);
+            // Pehle mahine ka byaj (loan date ka)
+            const initialInterest = monthlyByaj * 1;
+            const initialTotal = principal + initialInterest;
             loans[loanId] = {
                 id: loanId, user_id: userId, user_name: users[userId].name, officer_id: currentUser.officerId || currentUser.id,
-                type: 'month', principal, original_principal: principal, interest_rate: parseFloat(document.getElementById('loanMonthInterest').value),
-                total_interest: 0, total_amount: principal, remaining_amount: principal,
+                type: 'month', principal, original_principal: principal, interest_rate: interestRate,
+                total_interest: initialInterest, total_amount: initialTotal, remaining_amount: initialTotal,
                 per_day: null, start_date: displayStartDate, last_date: null, days: null,
                 status: 'active', last_month_check: displayStartDate, total_fine: 0, total_discount: 0
             };
@@ -3210,7 +3398,7 @@
                 alertHtml += `<div class="alert-item">
                     <div><strong>👤 ${item.customerName}</strong> <span class="alert-days">${item.daysOverdue} दिन</span></div>
                     <div style="font-size:10px; color:#666;">📞 ${item.customerMobile} | 📍 ${item.customerAddress.substring(0, 30)}</div>
-                    <div>💰 बकाया: ₹${item.remainingAmount.toLocaleString('en-IN')} | 📅 लोन तारीख: ${item.loanStartDate}</div>
+                    <div>💰 बकाया: ₹${item.remainingAmount.toLocaleString('en-IN')} | 📅 लोन तारीख: ${displayDate(item.loanStartDate)}</div>
                     <div style="margin-top:6px;">
                         <button class="small info" onclick="selectCustomer('${item.userId}','${item.customerName}')">📋 विवरण</button>
                         <button class="small warning" onclick="openPaymentModal('${item.loanId}')">💰 पेमेंट</button>
@@ -3240,7 +3428,7 @@
             let customerName = p.user_name;
             if (users[p.user_id] && users[p.user_id].address) customerName += ` (${users[p.user_id].address.substring(0, 15)})`;
             const receiptBtn = p.loan_id ? `<button class="small" style="background:#8e44ad;" onclick="openReceiptModal('${p.loan_id}')">🧾</button>` : '';
-            html += `<div class="collection-item"><span><strong>${customerName}</strong></span><span>${displayText}</span><span>${p.date}</span><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${receiptBtn}</div>`;
+            html += `<div class="collection-item"><span><strong>${customerName}</strong></span><span>${displayText}</span><span>${displayDate(p.date)}</span><button class="small info" onclick="openEditPayment('${id}')">${t('edit')}</button>${receiptBtn}</div>`;
         }
         html += '</div>';
         div.innerHTML = html;
@@ -3396,6 +3584,30 @@
         });
     }
     
+    // ===== CLICK OUTSIDE MODAL TO CLOSE =====
+    const _modalCloseMap = {
+        'newCustomerModal':  () => closeNewCustomerModal(),
+        'paymentModal':      () => closePaymentModal(),
+        'editPaymentModal':  () => closeEditPaymentModal(),
+        'overdueModal':      () => closeOverdueModal(),
+        'discountModal':     () => closeDiscountModal(),
+        'detailsModal':      () => closeDetailsModal(),
+        'receiptModal':      () => closeReceiptModal(),
+        'bulkPaymentModal':  () => closeBulkPaymentModal(),
+        'newLoanModal':      () => closeNewLoanModal(),
+        'editLoanModal':     () => closeEditLoanModal(),
+    };
+
+    document.addEventListener('click', function(e) {
+        for (const [modalId, closeFn] of Object.entries(_modalCloseMap)) {
+            const modal = document.getElementById(modalId);
+            if (modal && modal.style.display === 'flex' && e.target === modal) {
+                closeFn();
+                break;
+            }
+        }
+    });
+
     // Click listener sirf ONCE lagao — refreshUI ke bahar
     document.addEventListener('click', function(event) {
         if (!event.target.closest('.action-dropdown')) {
@@ -3447,6 +3659,17 @@
     
     // ========== EVENT LISTENERS ==========
     document.addEventListener('DOMContentLoaded', function() {
+        // ===== AUTO-SELECT: sabhi input/textarea par click karne par poora text select ho =====
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                const el = e.target;
+                const type = (el.type || '').toLowerCase();
+                if (type !== 'checkbox' && type !== 'radio' && type !== 'file' && type !== 'button' && type !== 'submit') {
+                    setTimeout(() => el.select(), 10);
+                }
+            }
+        });
+        
         setupSearch();
         setupCollectionSearch();
         setupLedgerSearch();
