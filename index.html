@@ -3584,30 +3584,6 @@
         });
     }
     
-    // ===== CLICK OUTSIDE MODAL TO CLOSE =====
-    const _modalCloseMap = {
-        'newCustomerModal':  () => closeNewCustomerModal(),
-        'paymentModal':      () => closePaymentModal(),
-        'editPaymentModal':  () => closeEditPaymentModal(),
-        'overdueModal':      () => closeOverdueModal(),
-        'discountModal':     () => closeDiscountModal(),
-        'detailsModal':      () => closeDetailsModal(),
-        'receiptModal':      () => closeReceiptModal(),
-        'bulkPaymentModal':  () => closeBulkPaymentModal(),
-        'newLoanModal':      () => closeNewLoanModal(),
-        'editLoanModal':     () => closeEditLoanModal(),
-    };
-
-    document.addEventListener('click', function(e) {
-        for (const [modalId, closeFn] of Object.entries(_modalCloseMap)) {
-            const modal = document.getElementById(modalId);
-            if (modal && modal.style.display === 'flex' && e.target === modal) {
-                closeFn();
-                break;
-            }
-        }
-    });
-
     // Click listener sirf ONCE lagao — refreshUI ke bahar
     document.addEventListener('click', function(event) {
         if (!event.target.closest('.action-dropdown')) {
