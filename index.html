@@ -1801,6 +1801,9 @@
     function formatDateDMY(d) {
         return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     }
+
+    // DD/MM/YYYY ko DD-MM-YYYY display format mein badlo
+    function slashToDash(dateStr) {
         if (!dateStr) return '';
         return dateStr.replace(/\//g, '-');
     }
