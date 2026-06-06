@@ -3,13 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>HLB Finance - लोन मैनेजर (Supabase)</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f7; -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }
+        button { touch-action: manipulation; cursor: pointer; }
+        /* iOS input zoom fix - 16px se kam hone par zoom ho jaata hai */
+        input[type="text"], input[type="password"], input[type="number"], input[type="date"], input[type="tel"], textarea, select { font-size: 16px !important; }
         .login-container {
             display: flex;
             justify-content: center;
@@ -384,8 +389,8 @@
         <h1 id="loginTitle">HLB FINANCE</h1>
         <div class="sub" id="loginSub">Powered By Hindu Lion Brothers</div>
         <p id="loginText">लॉगिन करें</p>
-        <input type="text" id="loginUsername" placeholder="यूजरनेम" autocomplete="off">
-        <input type="password" id="loginPassword" placeholder="पासवर्ड" autocomplete="off">
+        <input type="text" id="loginUsername" placeholder="यूजरनेम" autocomplete="off" inputmode="text" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+        <input type="password" id="loginPassword" placeholder="पासवर्ड" autocomplete="off" onkeydown="if(event.key==='Enter')checkLogin()">
         <button onclick="checkLogin()" id="loginBtn">लॉगिन करें</button>
         <div id="loginError" class="error"></div>
         <div class="restore-section">
@@ -651,7 +656,9 @@
     let _syncingNow = false;
     // Changed records tracker — sirf naye/badle records Supabase par jayenge
     // Changed records tracker — localStorage mein save hota hai taaki reload ke baad bhi rahe
-    const PENDING_KEY = 'hlb_pending_changes';
+    const PENDING_KEY   = 'hlb_pending_changes';
+    const LAST_SYNC_KEY = 'hlb_last_sync_time';
+    const SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
     
     function _loadPending() {
         try {
@@ -808,7 +815,7 @@
     // DOM ready hone ke baad button update karo
     document.addEventListener('DOMContentLoaded', () => updatePendingCount());
     
-    const GITHUB_USERS_URL = "users.json";
+    const GITHUB_USERS_URL = "https://raw.githubusercontent.com/balavntnpower-gif/FinanceApp/refs/heads/main/users.json";
     const DB_NAME = 'HLBFinanceDB';
     const DB_VERSION = 2;
     const STORE_NAME = 'appData';
@@ -1075,28 +1082,24 @@
                 return allData;
             }
             
-            // Parallel fetch — officers sirf admin ke liye
+            // Parallel fetch — officers sirf GitHub se aate hain, Supabase se nahi
             const promises = [
                 fetchAll('users',  filters),
                 fetchAll('loans',  filters),
                 fetchAll('ledger', filters),
                 fetchAll('fines',  filters),
             ];
-            if (currentUser.role === 'admin') {
-                promises.push(fetchAll('officers', {}));
-            }
             
             const results = await Promise.all(promises);
             const [usersData, loansData, ledgerData, finesData] = results;
-            const officersData = results[4] || [];
             
             if (usersData.length > 0)   usersData.forEach(u => { users[u.id] = u; });
             if (loansData.length > 0)   loansData.forEach(l => { loans[l.id] = l; });
             if (ledgerData.length > 0)  ledgerData.forEach(l => { ledger[l.id] = l; });
             if (finesData.length > 0)   finesData.forEach(f => { fines[f.id] = f; });
-            if (officersData.length > 0) officersData.forEach(o => { officers[o.id] = o; });
             
             await saveDataToLocal();
+            localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
             console.log("✅ Sync complete");
@@ -1288,8 +1291,9 @@
     
     async function loadUsersFromJSON() {
         try {
-            const response = await fetch(GITHUB_USERS_URL);
-            if (!response.ok) return;
+            // Pehle GitHub se fresh data lo
+            const response = await fetch(GITHUB_USERS_URL, { cache: 'no-store' });
+            if (!response.ok) throw new Error('fetch failed');
             const data = await response.json();
             if (data.users) {
                 for (let [username, userData] of Object.entries(data.users)) {
@@ -1300,8 +1304,29 @@
                     };
                 }
                 await dbSet('loan_officers', officers);
+                // Cache bhi karo localStorage mein
+                localStorage.setItem('githubUsersCache', JSON.stringify({ data, timestamp: Date.now() }));
+                console.log('✅ users.json GitHub se load hua');
             }
-        } catch (error) { console.log('users.json load error:', error.message); }
+        } catch (error) {
+            // Offline: cache use karo
+            const cached = localStorage.getItem('githubUsersCache');
+            if (cached) {
+                const { data } = JSON.parse(cached);
+                if (data && data.users) {
+                    for (let [username, userData] of Object.entries(data.users)) {
+                        officers[username] = {
+                            id: username, username: username, password: userData.password, role: userData.role,
+                            expiry: userData.expiry, name: userData.name, mobile: userData.mobile || '',
+                            print_company_name: userData.print_company_name || '', print_tagline: userData.print_tagline || ''
+                        };
+                    }
+                    console.log('✅ users.json cache se load hua (offline)');
+                }
+            } else {
+                console.log('❌ users.json load nahi hua, cache bhi nahi:', error.message);
+            }
+        }
     }
     
     async function fetchUsersFromGitHub() {
@@ -1319,55 +1344,75 @@
         }
     }
     
+    // Login se pehle Supabase se officers fresh load karo (currentUser ki zaroorat nahi)
+    async function loadOfficersFromSupabase() {
+        if (!supabaseClient) return;
+        try {
+            const { data, error } = await supabaseClient.from('officers').select('*');
+            if (error || !data || data.length === 0) return;
+            data.forEach(o => { officers[o.id] = o; });
+            await dbSet('loan_officers', officers);
+            console.log(`✅ Officers loaded from Supabase: ${data.length}`);
+        } catch(e) { console.log('Officers Supabase load error:', e.message); }
+    }
+
     async function checkLogin() {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
-        
+        if (!username || !password) { document.getElementById('loginError').innerText = '❌ यूजरनेम और पासवर्ड डालें!'; return; }
+
+        // Admin hardcoded login
         if (username.toLowerCase() === 'hindu' && password === 'Lion') {
-            currentUser = { id: 'admin', name: 'हिंदू', role: 'admin', officerId: null, password: 'Lion', expiry: null };
+            try {
+                currentUser = { id: 'admin', name: 'हिंदू', role: 'admin', officerId: 'admin', password: 'Lion', expiry: null };
+                saveSession(currentUser);
+                showDashboard();
+                updateExpiryBadge(null);
+                if (supabaseClient) {
+                    await syncFromSupabase();
+                    localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+                    const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size;
+                    if (_p > 0) setTimeout(_verifyPendingWithSupabase, 3000);
+                }
+            } catch(e) {
+                console.error('Admin login error:', e);
+                document.getElementById('loginError').innerText = '❌ Error: ' + e.message;
+            }
+            return;
+        }
+
+        document.getElementById('loginError').innerText = '⏳ जाँच हो रही है...';
+        document.getElementById('loginBtn').disabled = true;
+
+        try {
+            // GitHub se fresh data lo
+            let usersData = await fetchUsersFromGitHub();
+            document.getElementById('loginBtn').disabled = false;
+
+            if (!usersData || !usersData.users) {
+                document.getElementById('loginError').innerText = '❌ यूजर नहीं मिला! Internet जाँचें।';
+                return;
+            }
+            let user = usersData.users[username];
+            if (!user) { document.getElementById('loginError').innerText = '❌ यह यूजर रजिस्टर्ड नहीं है!'; return; }
+            if (user.password !== password) { document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; return; }
+            let today = new Date().toISOString().slice(0, 10);
+            if (user.expiry < today) { document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है!'; return; }
+            currentUser = { id: username, name: user.name, role: user.role, officerId: username, password, expiry: user.expiry };
             saveSession(currentUser);
             showDashboard();
-            updateExpiryBadge(null);
-            if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
-            return;
-        }
-        
-        document.getElementById('loginError').innerText = '⏳ Loading...';
-        let usersData = await fetchUsersFromGitHub();
-        if (!usersData || !usersData.users) {
-            if (officers && officers[username]) {
-                let officer = officers[username];
-                if (officer.password === password) {
-                    let today = new Date().toISOString().slice(0, 10);
-                    if (officer.expiry && officer.expiry < today) { 
-                        document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है!'; 
-                        return; 
-                    }
-                    currentUser = { id: username, name: officer.name, role: officer.role, officerId: username, password: password, expiry: officer.expiry };
-                    saveSession(currentUser);
-                    showDashboard();
-                    updateExpiryBadge(officer.expiry);
-                    if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
-                    return;
-                } else { 
-                    document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; 
-                    return; 
-                }
+            updateExpiryBadge(user.expiry);
+            if (supabaseClient) {
+                await syncFromSupabase();
+                localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+                const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size;
+                if (_p > 0) setTimeout(_verifyPendingWithSupabase, 3000);
             }
-            document.getElementById('loginError').innerText = '❌ Internet नहीं है!';
-            return;
+        } catch(e) {
+            console.error('Login error:', e);
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginError').innerText = '❌ Error: ' + e.message;
         }
-        
-        let user = usersData.users[username];
-        if (!user) { document.getElementById('loginError').innerText = '❌ यह यूजर रजिस्टर्ड नहीं है!'; return; }
-        if (user.password !== password) { document.getElementById('loginError').innerText = '❌ गलत पासवर्ड!'; return; }
-        let today = new Date().toISOString().slice(0, 10);
-        if (user.expiry < today) { document.getElementById('loginError').innerText = '❌ आपकी लाइसेंस समाप्त हो गई है!'; return; }
-        currentUser = { id: username, name: user.name, role: user.role, officerId: username, password: password, expiry: user.expiry };
-        saveSession(currentUser);
-        showDashboard();
-        updateExpiryBadge(user.expiry);
-        if (supabaseClient) { await syncFromSupabase(); const _p = _pendingChanges.loans.size + _pendingChanges.ledger.size; if(_p > 0) setTimeout(_verifyPendingWithSupabase, 3000); }
     }
     
     function logout() {
@@ -1424,9 +1469,58 @@
         }
         document.getElementById('collectionDate').value = getTodayDateForInput();
         document.getElementById('loanStartDate').value = getTodayDateForInput();
+        // Sabhi purane monthly loans naye niyam se recalculate karo
+        setTimeout(() => recalculateAllMonthlyLoans(), 1000);
         refreshUI();
         initMobileTabs();
         setTimeout(() => { checkAndShowReminder(); }, 5000);
+    }
+
+    // Sabhi active monthly loans ko naye niyam se recalculate karo
+    function recalculateAllMonthlyLoans() {
+        let changed = 0;
+        for (let loanId of Object.keys(loans)) {
+            const loan = loans[loanId];
+            if (loan.type !== 'month' || loan.status !== 'active') continue;
+
+            // Invalid date skip karo
+            const startDate = parseDateDMY(loan.start_date);
+            if (!startDate) {
+                console.warn(`Invalid date for loan ${loanId}: ${loan.start_date}`);
+                continue;
+            }
+
+            const originalPrincipal = loan.original_principal || loan.principal;
+            // original_principal ensure karo
+            if (!loan.original_principal) {
+                loan.original_principal = loan.principal;
+            }
+
+            const result = calculateSimpleInterest(loan);
+            const newTotal = originalPrincipal + result.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+            const payments = getTotalNormalPayments(loanId);
+            const newRemaining = Math.max(0, newTotal - payments);
+
+            const totalDiff = Math.abs(newTotal - (loan.total_amount || 0));
+            const remDiff = Math.abs(newRemaining - (loan.remaining_amount || 0));
+
+            if (totalDiff > 0.5 || remDiff > 0.5) {
+                loan.total_interest = result.total_interest;
+                loan.total_amount = newTotal;
+                loan.remaining_amount = newRemaining;
+                loan.original_principal = originalPrincipal;
+                if (newRemaining <= 0) loan.status = 'completed';
+                loans[loanId] = loan;
+                _pendingChanges.loans.add(loanId);
+                changed++;
+            }
+        }
+        if (changed > 0) {
+            _savePending();
+            saveData();
+            refreshUI();
+            console.log(`✅ Recalculated ${changed} monthly loans`);
+        }
     }
     
     // ========== REMINDER FUNCTIONS ==========
@@ -1565,11 +1659,108 @@
         document.getElementById('totalLoanBox').innerHTML = `आज तक: ₹${total.toLocaleString('en-IN')}`;
     }
     
-    function updateAllLoansTillDate() {
-        alert('✅ लोन अपडेट फीचर एक्टिव है!');
-        refreshUI();
+    async function updateAllLoansTillDate() {
+        const btn = document.querySelector('.update-all-btn-header');
+        if (btn) { btn.disabled = true; btn.innerText = '⏳ Calculate हो रहा है...'; }
+
+        let changed = 0;
+        let skipped = 0;
+        const updatedIds = [];
+
+        for (let loanId of Object.keys(loans)) {
+            const loan = loans[loanId];
+
+            // closed_by_principal_payment wale loans ko force completed karo
+            if (loan.closed_by_principal_payment && loan.status !== 'completed') {
+                loan.status = 'completed';
+                loans[loanId] = loan;
+                _pendingChanges.loans.add(loanId);
+                updatedIds.push(loanId);
+                changed++;
+                continue;
+            }
+
+            if (loan.status !== 'active') continue;
+
+            // original_principal ensure karo
+            if (!loan.original_principal) loan.original_principal = loan.principal;
+
+            let newTotal, newInterest;
+
+            if (loan.type === 'month') {
+                // ===== MONTHLY LOAN =====
+                const parts = (loan.start_date || '').split('/');
+                if (parts.length !== 3) { skipped++; continue; }
+                const yr = parseInt(parts[2]);
+                if (yr > 2100 || yr < 2000) { skipped++; continue; }
+
+                const result = calculateSimpleInterest(loan);
+                newInterest = result.total_interest;
+                newTotal    = loan.original_principal + newInterest + (loan.total_fine || 0) - (loan.total_discount || 0);
+
+            } else if (loan.type === 'day') {
+                // ===== DAY LOAN =====
+                // Total hamesha fixed hai: principal + 20% byaj
+                const orig = loan.original_principal;
+                newInterest = Math.round(orig * 0.2 * 100) / 100;
+                newTotal    = orig + newInterest + (loan.total_fine || 0) - (loan.total_discount || 0);
+                // per_day bhi sahi karo
+                if (loan.days) loan.per_day = newTotal / loan.days;
+
+            } else {
+                skipped++;
+                continue;
+            }
+
+            // Payments se remaining calculate karo
+            const payments     = getTotalNormalPayments(loanId);
+            const newRemaining = Math.max(0, newTotal - payments);
+
+            const diffTotal = Math.abs(newTotal     - (loan.total_amount     || 0));
+            const diffRem   = Math.abs(newRemaining - (loan.remaining_amount || 0));
+            const diffInt   = Math.abs(newInterest  - (loan.total_interest   || 0));
+
+            if (diffTotal > 0.01 || diffRem > 0.01 || diffInt > 0.01) {
+                loan.total_interest   = newInterest;
+                loan.total_amount     = newTotal;
+                loan.remaining_amount = newRemaining;
+                if (newRemaining <= 0) loan.status = 'completed';
+                loans[loanId] = loan;
+                _pendingChanges.loans.add(loanId);
+                updatedIds.push(loanId);
+                changed++;
+            }
+        }
+
+        if (changed > 0) {
+            _savePending();
+
+            // Supabase mein batch save
+            if (supabaseClient && navigator.onLine) {
+                if (btn) btn.innerText = '☁️ Supabase Save हो रहा है...';
+                try {
+                    const batchSize = 20;
+                    for (let i = 0; i < updatedIds.length; i += batchSize) {
+                        const batch = updatedIds.slice(i, i + batchSize).map(id => loans[id]);
+                        await supabaseClient.from('loans').upsert(batch, { onConflict: 'id' });
+                    }
+                    _pendingChanges.loans.clear();
+                    _savePending();
+                } catch (err) {
+                    console.error('Supabase save error:', err);
+                }
+            }
+            refreshUI();
+        }
+
+        if (btn) { btn.disabled = false; btn.innerText = '🔄 All Loan Update'; }
+
+        const msg = changed > 0
+            ? `✅ ${changed} लोन अपडेट हुए!${skipped > 0 ? `\n⚠️ ${skipped} लोन skip (invalid date)` : ''}${navigator.onLine ? '\n☁️ Supabase में save हो गया!' : '\n📴 Offline — बाद में sync होगा'}`
+            : `✅ सभी लोन पहले से सही हैं!${skipped > 0 ? `\n⚠️ ${skipped} लोन skip (invalid date)` : ''}`;
+        showToast(msg, 3000);
     }
-    
+
     function calculateDayLoan() {
         const principal = parseFloat(document.getElementById('loanPrincipal').value) || 0;
         const interest = principal * 0.2;
@@ -1600,12 +1791,23 @@
         return total;
     }
     
+    // Officer dhundho — ID se, ya phir officers mein se naam match karke
+    function findOfficer(officerId) {
+        if (!officerId) return null;
+        // Direct ID match
+        if (officers[officerId]) return officers[officerId];
+        // String comparison (type mismatch fix)
+        const strId = String(officerId);
+        for (let [key, off] of Object.entries(officers)) {
+            if (String(key) === strId || String(off.id) === strId) return off;
+        }
+        return null;
+    }
     // DD/MM/YYYY string ko Date object mein convert karo
     function parseDateDMY(dateStr) {
         if (!dateStr) return null;
         const parts = dateStr.split('/');
         if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        // YYYY-MM-DD format bhi handle karo
         const parts2 = dateStr.split('-');
         if (parts2.length === 3 && parts2[0].length === 4) return new Date(parseInt(parts2[0]), parseInt(parts2[1]) - 1, parseInt(parts2[2]));
         return null;
@@ -1616,7 +1818,7 @@
         return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     }
 
-    // DD/MM/YYYY display format to DD-MM-YYYY display format
+    // DD/MM/YYYY ko DD-MM-YYYY display format mein badlo
     function slashToDash(dateStr) {
         if (!dateStr) return '';
         return dateStr.replace(/\//g, '-');
@@ -1636,38 +1838,57 @@
         if (!loan.start_date) {
             return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
         }
-        
-        const startDate = parseDateDMY(loan.start_date);
-        if (!startDate) return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
-        
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        startDate.setHours(0,0,0,0);
-        
-        // Pehla byaj loan lene ke din hi add hota hai (month 1)
-        // Phir har mahine usi tarikh ko agle byaj add hote hain
-        // Count: kitni byaj dates aaj tak aa chuki hain
-        
-        let monthsCount = 0;
-        let checkDate = new Date(startDate);
-        
-        while (checkDate <= today) {
-            monthsCount++;
-            // Agle mahine ki same date
-            const nextMonth = new Date(checkDate);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-            checkDate = nextMonth;
+
+        // DD/MM/YYYY parse karo — timezone se door, sirf numbers
+        const parts = loan.start_date.split('/');
+        if (parts.length !== 3) return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
+
+        const startDay   = parseInt(parts[0]);
+        const startMonth = parseInt(parts[1]) - 1; // 0-indexed
+        let   startYear  = parseInt(parts[2]);
+
+        // Invalid year fix (jaise 20218 → skip)
+        if (startYear > 2100 || startYear < 2000) {
+            return { total_interest: 0, total_amount: loan.principal, months_count: 0 };
         }
-        
-        // Original principal par fix byaj (muldhan kabhi nahi badlata)
+
+        const now = new Date();
+        const todayDay   = now.getDate();
+        const todayMonth = now.getMonth(); // 0-indexed
+        const todayYear  = now.getFullYear();
+
+        // Har mahine us tarikh ko byaj add hota hai
+        // Agar us mahine mein woh din nahi hai toh us mahine ka aakhri din
+        let monthsCount = 0;
+        let cy = startYear;
+        let cm = startMonth;
+
+        while (true) {
+            // Is mahine mein kitne din hain
+            const daysInCurMonth = new Date(cy, cm + 1, 0).getDate();
+            const actualDay = Math.min(startDay, daysInCurMonth);
+
+            // Kya yeh date aaj se pehle ya aaj ki hai?
+            const dateBeforeToday =
+                cy < todayYear ||
+                (cy === todayYear && cm < todayMonth) ||
+                (cy === todayYear && cm === todayMonth && actualDay <= todayDay);
+
+            if (!dateBeforeToday) break;
+
+            monthsCount++;
+            cm++;
+            if (cm > 11) { cm = 0; cy++; }
+        }
+
         const originalPrincipal = loan.original_principal || loan.principal;
-        const monthlyByaj = originalPrincipal * (loan.interest_rate / 100);
+        const monthlyByaj   = originalPrincipal * (loan.interest_rate / 100);
         const totalInterest = Math.round(monthlyByaj * monthsCount * 100) / 100;
-        
+
         return {
             total_interest: totalInterest,
-            total_amount: originalPrincipal + totalInterest,
-            months_count: monthsCount
+            total_amount:   originalPrincipal + totalInterest,
+            months_count:   monthsCount
         };
     }
     
@@ -1979,6 +2200,16 @@
         document.getElementById('searchSuggestions').style.display = 'none';
         currentSelectedUserId = userId;
         let customerLoans = Object.entries(loans).filter(([id,l]) => l.user_id === userId);
+        
+        // closed_by_principal_payment wale loans ka status force completed karo
+        for (let [id, loan] of customerLoans) {
+            if (loan.closed_by_principal_payment && loan.status !== 'completed') {
+                loan.status = 'completed';
+                loans[id] = loan;
+                _pendingChanges.loans.add(id);
+            }
+        }
+
         if (showOnlyCompletedLoans) { customerLoans = customerLoans.filter(([id,l]) => l.status === 'completed'); }
         else { customerLoans = customerLoans.filter(([id,l]) => l.status === 'active'); }
         
@@ -2135,29 +2366,29 @@
     
     // ========== DELETE CUSTOMER - Full offline support ==========
     async function deleteCustomer(userId, userName) {
-        if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन और कलेक्शन भी डिलीट हो जाएंगे!`)) {
-            return;
-        }
+        if (!confirm(`⚠️ क्या आप "${userName}" को पूरी तरह डिलीट करना चाहते हैं?\n\nइस ग्राहक के सभी लोन, कलेक्शन और फाइन भी डिलीट हो जाएंगे!\n\nयह काम वापस नहीं होगा!`)) return;
+
         try {
-            // Collect all related IDs
-            const ledgerIds  = Object.entries(ledger).filter(([id,e]) => e.user_id === userId).map(([id]) => id);
-            const fineIds    = Object.entries(fines).filter(([id,f]) => f.user_id === userId).map(([id]) => id);
+            // Saare related IDs collect karo
             const loanIds    = Object.entries(loans).filter(([id,l]) => l.user_id === userId).map(([id]) => id);
+            const ledgerIds  = Object.entries(ledger).filter(([id,e]) => e.user_id === userId || loanIds.includes(e.loan_id)).map(([id]) => id);
+            const fineIds    = Object.entries(fines || {}).filter(([id,f]) => f.user_id === userId || loanIds.includes(f.loan_id)).map(([id]) => id);
+
+            console.log(`Deleting user ${userId}: ${loanIds.length} loans, ${ledgerIds.length} ledger, ${fineIds.length} fines`);
 
             if (supabaseClient && navigator.onLine) {
-                // Online: turant Supabase se delete karo
-                await _deleteFromSupabase('ledger', ledgerIds);
-                await _deleteFromSupabase('fines',  fineIds);
-                await _deleteFromSupabase('loans',  loanIds);
-                await _deleteFromSupabase('users',  [userId]);
+                // Online: Supabase se pehle delete karo (order important — child pehle)
+                if (ledgerIds.length)  await _deleteFromSupabase('ledger', ledgerIds);
+                if (fineIds.length)    await _deleteFromSupabase('fines',  fineIds);
+                if (loanIds.length)    await _deleteFromSupabase('loans',  loanIds);
+                await _deleteFromSupabase('users', [userId]);
             } else {
-                // Offline: pending deletes mein track karo
+                // Offline: pending deletes queue mein daalo
                 ledgerIds.forEach(id => _pendingDeletes.ledger.add(id));
                 fineIds.forEach(id   => _pendingDeletes.fines.add(id));
                 loanIds.forEach(id   => _pendingDeletes.loans.add(id));
                 _pendingDeletes.users.add(userId);
                 _savePendingDeletes();
-                console.log(`[Offline] Queued delete: user ${userId} + ${loanIds.length} loans + ${ledgerIds.length} ledger + ${fineIds.length} fines`);
             }
 
             // Local se delete
@@ -2171,7 +2402,7 @@
             document.getElementById('searchInput').value = '';
             document.getElementById('searchResult').innerHTML = '';
             if (currentSelectedUserId === userId) currentSelectedUserId = null;
-            showToast(`✅ "${userName}" डिलीट हो गया!` + (!navigator.onLine ? ' (Online होने पर Supabase से भी हटेगा)' : ''), 3000);
+            showToast(`✅ "${userName}" और उनका सारा डेटा डिलीट हो गया!` + (!navigator.onLine ? '\n(Online होने पर Supabase से भी हटेगा)' : ''), 3000);
 
         } catch(err) {
             console.error("Delete error:", err);
@@ -2183,6 +2414,18 @@
     function openPaymentModal(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
+
+        // Monthly loan ke liye payment modal kholte waqt bhi live recalculate
+        if (loan.type === 'month' && loan.status === 'active') {
+            const result = calculateSimpleInterest(loan);
+            const originalPrincipal = loan.original_principal || loan.principal;
+            loan.total_interest = result.total_interest;
+            loan.total_amount = originalPrincipal + result.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+            const totalNormalPayments = getTotalNormalPayments(loanId);
+            loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
+            loans[loanId] = loan;
+        }
+
         document.getElementById('paymentLoanId').value = loanId;
         document.getElementById('paymentUserName').innerText = loan.user_name;
         document.getElementById('paymentRemaining').innerText = loan.remaining_amount;
@@ -2495,7 +2738,7 @@
         const finesList = Object.entries(fines).filter(([id,f]) => f.loan_id === loanId);
         const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
         const customer = users[loan.user_id] || {};
-        const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
+        const officer = findOfficer(loan.officer_id) || { name: 'अज्ञात' };
         let totalPaid = 0;
         for (let [id, p] of payments) totalPaid += p.amount_paid;
         let companyName = officer.print_company_name || 'HLB FINANCE';
@@ -2555,13 +2798,29 @@
     function showLoanDetails(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
+
+        // Monthly loan ke liye — details kholte waqt live recalculate karo
+        if (loan.type === 'month' && loan.status === 'active') {
+            const result = calculateSimpleInterest(loan);
+            const originalPrincipal = loan.original_principal || loan.principal;
+            loan.total_interest = result.total_interest;
+            loan.total_amount = originalPrincipal + result.total_interest + (loan.total_fine || 0) - (loan.total_discount || 0);
+            const totalNormalPayments = getTotalNormalPayments(loanId);
+            loan.remaining_amount = Math.max(0, loan.total_amount - totalNormalPayments);
+            if (loan.remaining_amount <= 0) loan.status = 'completed';
+            loans[loanId] = loan;
+            _pendingChanges.loans.add(loanId);
+            _savePending();
+            saveData();
+        }
+
         const payments = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && (e.type === 'payment' || e.type === 'direct'));
         const principalClosure = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'principal_closure');
         const newLoanEntry = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'new_loan_from_principal');
         const finesList = Object.entries(fines).filter(([id,f]) => f.loan_id === loanId);
         const discounts = Object.entries(ledger).filter(([id,e]) => e.loan_id === loanId && e.type === 'discount');
         const customer = users[loan.user_id] || {};
-        const officer = officers[loan.officer_id] || { name: 'अज्ञात' };
+        const officer = findOfficer(loan.officer_id) || { name: 'अज्ञात' };
         let totalPaid = 0;
         for (let [id, p] of payments) totalPaid += p.amount_paid;
         let all = [];
@@ -2589,8 +2848,7 @@
         <strong>ब्याज दर:</strong> ${loan.interest_rate}%<br>
         ${remarkHtml}
         <hr>
-        <strong>मूलधन (प्रारंभिक):</strong> ₹${(loan.original_principal || loan.principal).toLocaleString('en-IN')}<br>
-        <strong>मूलधन (वर्तमान):</strong> ₹${loan.principal.toLocaleString('en-IN')}<br>
+        <strong>मूलधन:</strong> ₹${loan.principal.toLocaleString('en-IN')}<br>
         <strong>ब्याज (जोड़ा गया):</strong> ₹${loan.total_interest.toLocaleString('en-IN')}<br>
         ${loan.total_fine ? `<strong>फाइन:</strong> ₹${loan.total_fine.toLocaleString('en-IN')}<br>` : ''}
         ${loan.total_discount ? `<strong>डिस्काउंट:</strong> ₹${loan.total_discount.toLocaleString('en-IN')}<br>` : ''}
@@ -2609,7 +2867,7 @@
         const loan = loans[loanId];
         if (!loan) return;
         const customer = users[loan.user_id] || {};
-        const officer = officers[loan.officer_id] || officers[currentUser.officerId] || {};
+        const officer = findOfficer(loan.officer_id) || findOfficer(currentUser?.officerId) || {};
         const loanPayments = Object.entries(ledger).filter(([id, e]) => e.loan_id === loanId && e.type === 'payment').sort((a, b) => b[0].localeCompare(a[0]));
         if (loanPayments.length === 0) { alert('इस लोन पर अभी कोई पेमेंट नहीं है!'); return; }
         const [lastId, lastPayment] = loanPayments[0];
@@ -3489,7 +3747,7 @@
         
         requestAnimationFrame(() => {
             const now = Date.now();
-            if (now - _lastMonthlyCheck > 3600000) {
+            if (now - _lastMonthlyCheck > 300000) {  // 5 minute (pehle 1 ghanta tha)
                 checkMonthlyInterest();
                 _lastMonthlyCheck = now;
             }
@@ -3584,6 +3842,23 @@
         });
     }
     
+    // ===== CLICK OUTSIDE MODAL TO CLOSE =====
+    document.addEventListener('click', function(e) {
+        if (!e.target.classList.contains('modal')) return;
+        if (e.target.style.display !== 'flex') return;
+        const id = e.target.id;
+        if      (id === 'newCustomerModal')  closeNewCustomerModal();
+        else if (id === 'paymentModal')      closePaymentModal();
+        else if (id === 'editPaymentModal')  closeEditPaymentModal();
+        else if (id === 'overdueModal')      closeOverdueModal();
+        else if (id === 'discountModal')     closeDiscountModal();
+        else if (id === 'detailsModal')      closeDetailsModal();
+        else if (id === 'receiptModal')      closeReceiptModal();
+        else if (id === 'bulkPaymentModal')  closeBulkPaymentModal();
+        else if (id === 'newLoanModal')      closeNewLoanModal();
+        else if (id === 'editLoanModal')     closeEditLoanModal();
+    });
+
     // Click listener sirf ONCE lagao — refreshUI ke bahar
     document.addEventListener('click', function(event) {
         if (!event.target.closest('.action-dropdown')) {
@@ -3596,38 +3871,72 @@
         initSupabase();
         try {
             await openDB();
+
+            // Step 1: Local data TURANT load karo
             const [savedUsers, savedOfficers, savedLoans, savedLedger, savedFines] = await Promise.all([
                 dbGet('loan_users'), dbGet('loan_officers'), dbGet('loan_loans'), dbGet('loan_ledger'), dbGet('loan_fines')
             ]);
-            if (savedUsers) { users = savedUsers; console.log(`✅ Loaded ${Object.keys(users).length} users from IndexedDB`); }
-            if (savedOfficers) { officers = savedOfficers; console.log(`✅ Loaded ${Object.keys(officers).length} officers from IndexedDB`); }
-            if (savedLoans) { loans = savedLoans; console.log(`✅ Loaded ${Object.keys(loans).length} loans from IndexedDB`); }
-            if (savedLedger) { ledger = savedLedger; console.log(`✅ Loaded ${Object.keys(ledger).length} ledger entries from IndexedDB`); }
-            if (savedFines) { fines = savedFines; console.log(`✅ Loaded ${Object.keys(fines).length} fines from IndexedDB`); }
-            
-            if (!savedOfficers || Object.keys(savedOfficers).length === 0) {
-                await loadUsersFromJSON();
-            }
-            
+            if (savedUsers)    users    = savedUsers;
+            if (savedOfficers) officers = savedOfficers;
+            if (savedLoans)    loans    = savedLoans;
+            if (savedLedger)   ledger   = savedLedger;
+            if (savedFines)    fines    = savedFines;
+
+            console.log(`✅ Local: ${Object.keys(loans).length} loans, ${Object.keys(users).length} users, ${Object.keys(ledger).length} ledger`);
+
+            // Background mein GitHub se officers load karo
+            loadUsersFromJSON().catch(e => console.log('GitHub load error:', e.message));
+
             const savedSession = getSession();
             if (savedSession && savedSession.id && savedSession.role) {
                 currentUser = savedSession;
-                showDashboard();
-                if (currentUser.expiry) updateExpiryBadge(currentUser.expiry);
-                else updateExpiryBadge(null);
-                
-                if (supabaseClient) {
-                    setTimeout(async () => {
-                        await syncFromSupabase();
-                        // Har device par startup mein ghost IDs auto-clean karo
-                        await _verifyPendingWithSupabase();
-                        refreshUI();
-                    }, 500);
+                try {
+                    // Step 2: Dashboard TURANT dikha do (local data se)
+                    showDashboard();
+                    if (currentUser.expiry) updateExpiryBadge(currentUser.expiry);
+                    else updateExpiryBadge(null);
+
+                    // Step 3: Supabase sync — smart decide karo
+                    if (supabaseClient && navigator.onLine) {
+                        const lastSync  = parseInt(localStorage.getItem(LAST_SYNC_KEY) || '0');
+                        const now       = Date.now();
+                        const localEmpty = Object.keys(loans).length === 0 && Object.keys(users).length === 0;
+                        const needsSync  = localEmpty || (now - lastSync > SYNC_INTERVAL);
+
+                        if (needsSync) {
+                            // Pehli baar ya 30 min baad — Supabase se sync karo
+                            console.log(localEmpty ? '🔄 Local empty — Supabase se load kar raha hoon...' : '🔄 30 min ho gaye — Supabase se sync...');
+                            updateSyncStatus('pending', '🔄 सिन्क...');
+                            setTimeout(async () => {
+                                await syncFromSupabase();
+                                localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+                                await _verifyPendingWithSupabase();
+                                refreshUI();
+                            }, 300);
+                        } else {
+                            // Local data fresh hai — sirf pending changes push karo
+                            console.log(`✅ Local data fresh (${Math.round((now - lastSync)/60000)} min ago) — sirf pending sync`);
+                            setTimeout(async () => {
+                                await _processPendingDeletes();
+                                await _verifyPendingWithSupabase();
+                                // Agar koi pending change hai toh push karo
+                                const pending = _pendingChanges.loans.size + _pendingChanges.users.size + _pendingChanges.ledger.size + _pendingChanges.fines.size;
+                                if (pending > 0) {
+                                    console.log(`📤 ${pending} pending changes push kar raha hoon...`);
+                                    await saveData();
+                                }
+                            }, 500);
+                        }
+                    }
+                    return;
+                } catch(dashErr) {
+                    console.error('showDashboard error:', dashErr);
+                    clearSession();
+                    currentUser = null;
                 }
-                return;
             }
         } catch(error) { console.error('loadData error:', error); }
-        
+
         document.getElementById('loginPage').style.display = 'flex';
         document.getElementById('dashboard').style.display = 'none';
         currentUser = null;
