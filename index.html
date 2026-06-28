@@ -3628,7 +3628,7 @@
         let today = new Date();
         for (let [loanId, loan] of Object.entries(loans)) {
             if (currentUser && currentUser.role === 'officer' && loan.officer_id !== currentUser.officerId) continue;
-            if (loan.type === 'month' && loan.status === 'active') {
+            if (loan.type === 'month' && loan.status === 'active' && !loan.closed_by_principal_payment) {
                 let lastPaymentDate = null;
                 for (let [id, entry] of Object.entries(ledger)) {
                     if (entry.loan_id === loanId && (entry.type === 'payment' || entry.type === 'direct')) {
@@ -3948,6 +3948,7 @@
         document.addEventListener('click', function(e) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 const el = e.target;
+                if (el.id === 'bulkPasteArea') return;
                 const type = (el.type || '').toLowerCase();
                 if (type !== 'checkbox' && type !== 'radio' && type !== 'file' && type !== 'button' && type !== 'submit') {
                     setTimeout(() => el.select(), 10);
