@@ -2795,6 +2795,17 @@
         printWindow.document.close();
     }
     
+    function toggleExcelView() {
+        const full = document.getElementById('fullTableWrap');
+        const xl = document.getElementById('excelTableWrap');
+        const btn = document.getElementById('excelViewBtn');
+        if (!full || !xl || !btn) return;
+        const showingExcel = xl.style.display !== 'none';
+        full.style.display = showingExcel ? '' : 'none';
+        xl.style.display = showingExcel ? 'none' : '';
+        btn.textContent = showingExcel ? '📊 Excel View' : '← वापस';
+    }
+
     function showLoanDetails(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
@@ -2838,6 +2849,18 @@
         for (let i = 0; i < all.length; i++) {
             rows += `<tr style="text-align:center"><td>${i+1}<\/td><td>${displayDate(all[i].date)}<\/td><td>${all[i].type}${all[i].extra ? '<br><small style="color:#888;">'+all[i].extra+'</small>' : ''}<\/td><td class="text-right">₹${all[i].amount.toLocaleString('en-IN')}<\/td><td class="text-right">${all[i].discount ? '₹'+all[i].discount : '-'}<\/td><\/tr>`;
         }
+        // Excel View: sirf payments, sirf number + date (DD-MM-YYYY)
+        const excelList = payments.map(([id, p]) => ({ date: p.date, amount: p.amount_paid })).sort((x, y) => {
+            const xp = x.date.split('/'), yp = y.date.split('/');
+            return new Date(xp[2], xp[1]-1, xp[0]) - new Date(yp[2], yp[1]-1, yp[0]);
+        });
+        // Plain style: copy karne par Excel me sirf 12pt text aaye, koi border/rang nahi
+        const XL_CELL = 'font-family:Calibri,Arial,sans-serif;font-size:12pt;color:#000;background:none;border:none;padding:0;margin:0;text-align:left;font-weight:normal;';
+        const XL_HEAD = XL_CELL + 'font-weight:bold;';
+        let excelRows = '';
+        for (const r of excelList) {
+            excelRows += `<tr><td style="${XL_CELL}">${r.amount}<\/td><td style="${XL_CELL}">${displayDate(r.date)}<\/td><\/tr>`;
+        }
         let remarkHtml = loan.remark ? `<div class="remark-card"><strong>📝 Remark:</strong><br>${loan.remark}</div>` : '';
         const modalHtml = `<div><div style="background:#f5f5f5;padding:6px;margin-bottom:8px">
         <strong>ग्राहक:</strong> ${loan.user_name}<br>
@@ -2856,7 +2879,7 @@
         <strong>जमा कुल:</strong> ₹${totalPaid.toLocaleString('en-IN')}<br>
         <strong>बाकी:</strong> ₹${loan.remaining_amount.toLocaleString('en-IN')}<br>
         <strong>कुल पेमेंट्स:</strong> ${payments.length} बार
-        </div><h4>लेन-देन का विवरण</h4><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody>}</div>`;
+        </div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h4 style="margin:8px 0;">लेन-देन का विवरण</h4><button type="button" id="excelViewBtn" class="small info" onclick="toggleExcelView()">📊 Excel View</button></div><div id="fullTableWrap"><table class="details-table"><thead><tr><th>क्र.</th><th>तारीख</th><th>प्रकार</th><th class="text-right">राशि (₹)</th><th class="text-right">छूट (₹)</th></tr></thead><tbody>${rows || '<tr><td colspan="5">कोई लेन-देन नहीं<\/td><\/tr>'}</tbody></table></div><div id="excelTableWrap" style="display:none;"><table style="border-collapse:collapse;border:none;background:none;width:auto;margin:0;"><thead><tr><th style="${XL_HEAD}padding-right:30px;">राशि (₹)</th><th style="${XL_HEAD}">तारीख</th></tr></thead><tbody>${excelRows || `<tr><td colspan="2" style="${XL_CELL}">कोई पेमेंट नहीं<\/td><\/tr>`}</tbody></table></div></div>`;
         document.getElementById('detailsModalContent').innerHTML = modalHtml;
         document.getElementById('detailsModal').style.display = 'flex';
     }
