@@ -2173,6 +2173,7 @@
             else if (e.type === 'discount') { displayText = `डिस्काउंट: ₹${e.discount}`; }
             else if (e.type === 'principal_closure') { displayText = `🔒 ${e.message || 'मूलधन जमा - लोन बंद'}`; }
             else if (e.type === 'new_loan_from_principal') { displayText = `🆕 ${e.message || 'नया लोन बना'}`; }
+            else if (e.type === 'manual_close') { displayText = `🔒 लोन मैन्युअली बंद किया गया (बाकी ₹${e.old_balance || 0} माफ)`; }
             else { displayText = `कलेक्शन: ₹${e.amount_paid}`; }
             let customerDisplay = e.user_name;
             if (users[e.user_id] && users[e.user_id].address) customerDisplay += ` (${users[e.user_id].address.substring(0, 15)})`;
@@ -2244,7 +2245,7 @@
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${displayDate(loan.start_date)}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button><button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${displayDate(loan.start_date)}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>${loan.type === 'month' && loan.status === 'active' ? `<button style="background:#2c3e50;" onclick="closeLoanManually('${id}'); event.stopPropagation();">🔒 Close Loan</button>` : ''}<button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -2605,6 +2606,41 @@
         ledger[ledgerId] = { id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name, officer_id: currentUser.officerId || currentUser.id, date: getTodayDate(), amount_paid: 0, old_balance: loan.remaining_amount + discount, new_balance: loan.remaining_amount, type: 'discount', discount: discount };
         _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeDiscountModal();
         showToast(`🎁 ₹${discount} का डिस्काउंट दिया गया!`, 2000);
+    }
+
+    // ========== MANUALLY CLOSE MONTHLY LOAN (auto-byaj rokne ke liye) ==========
+    // Monthly loan ko haath se 'completed' kar do taaki checkMonthlyInterest() /
+    // calculateSimpleInterest() ise aage se skip kar de aur naya byaj na jude.
+    function closeLoanManually(loanId) {
+        const loan = loans[loanId];
+        if (!loan) { alert('❌ लोन नहीं मिला!'); return; }
+        if (loan.type !== 'month') { alert('⚠️ यह सुविधा सिर्फ महीने वाले (monthly) लोन के लिए है!'); return; }
+        if (loan.status === 'completed') { alert('⚠️ यह लोन पहले से बंद है!'); return; }
+
+        const oldRemaining = loan.remaining_amount;
+        const confirmMsg = oldRemaining > 0
+            ? `क्या आप पक्का इस लोन को बंद करना चाहते हैं?\n\nबाकी राशि ₹${oldRemaining.toLocaleString('en-IN')} को 0 कर दिया जाएगा और आगे से इस पर कोई ब्याज (byaj) नहीं जुड़ेगा।\n\nयह काम वापस नहीं हो सकता (undo नहीं होगा)।`
+            : `क्या आप पक्का इस लोन को बंद करना चाहते हैं?\n\nयह लोन पहले से ₹0 बाकी दिखा रहा है — बंद करने पर आगे से कोई ब्याज नहीं जुड़ेगा।`;
+        if (!confirm(confirmMsg)) return;
+
+        loan.remaining_amount = 0;
+        loan.status = 'completed';
+        loan.closed_manually = true;
+        loan.manual_close_date = getTodayDate();
+        loans[loanId] = loan;
+
+        // Ledger mein ek record daalo taaki history me pata chale ki yeh manually close hua tha
+        const ledgerId = Date.now().toString();
+        ledger[ledgerId] = {
+            id: ledgerId, loan_id: loanId, user_id: loan.user_id, user_name: loan.user_name,
+            officer_id: currentUser.officerId || currentUser.id, date: getTodayDate(),
+            amount_paid: 0, old_balance: oldRemaining, new_balance: 0,
+            type: 'manual_close', discount: 0
+        };
+
+        _pendingChanges.loans.add(loanId); _pendingChanges.ledger.add(ledgerId);
+        _savePending(); saveData(); refreshUI();
+        showToast('🔒 लोन बंद कर दिया गया! अब इस पर byaj नहीं जुड़ेगा।', 2500);
     }
     
     function openPaymentEditList(loanId) {
@@ -3210,7 +3246,7 @@
         entry.date = newDate;
         entry.user_name = newName;
         ledger[ledgerId] = entry;
-        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(paymentId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
+        if(entry.loan_id) _pendingChanges.loans.add(entry.loan_id); _pendingChanges.ledger.add(ledgerId); _savePending(); saveData(); refreshUI(); closeEditPaymentModal();
         showToast("✅ पेमेंट एडिट हो गया!", 2000);
     }
     
@@ -3851,6 +3887,7 @@
                                     <button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button>
                                     <button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>
                                     <button style="background:#8e44ad;" onclick="openReceiptModal('${id}'); event.stopPropagation();">🧾 रसीद</button>
+                                    ${loan.type === 'month' ? `<button style="background:#2c3e50;" onclick="closeLoanManually('${id}'); event.stopPropagation();">🔒 Close Loan</button>` : ''}
                                     <button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button>
                                 </div>
                             </div>
