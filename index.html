@@ -2272,7 +2272,7 @@
                 let closeInfo = '';
                 if (loan.closed_by_principal_payment && loan.principal_paid_on_close) { closeInfo = `<div class="remark-card">📝 <strong>Remark:</strong><br>${loan.remark || ''}</div>`; }
                 const perDayInfo = loan.type === 'day' && loan.per_day ? `प्रतिदिन: ₹${loan.per_day.toFixed(2)}` : `ब्याज दर: ${loan.interest_rate}%`;
-                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${displayDate(loan.start_date)}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>${loan.type === 'month' && loan.status === 'active' ? `<button style="background:#2c3e50;" onclick="closeLoanManually('${id}'); event.stopPropagation();">🔒 Close Loan</button>` : ''}<button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
+                html += `<div class="loan-card"><div class="loan-line1">लोन तारीख: <strong>${displayDate(loan.start_date)}</strong> | टाइप: ${loanTypeText} | मूलधन: ₹${loan.principal.toLocaleString('en-IN')} | ${perDayInfo}</div><div class="loan-line2">बाकी: ₹${loan.remaining_amount.toLocaleString('en-IN')} | स्थिति: ${statusText}</div>${oldLoanInfo}${closeInfo}<div class="loan-buttons"><button class="small info" onclick="showLoanDetails('${id}')">${t('details')}</button><button class="small" style="background:#27ae60;" onclick="openPaymentModal('${id}')">${t('payment')}</button><button class="small" style="background:#16a085;" onclick="openBulkPaymentModal('${id}')">📋 Bulk</button><button class="small payedit" onclick="openPaymentEditList('${id}')">📝 Pay Edit</button><div class="action-dropdown" style="display:inline-block;vertical-align:middle;"><button class="small" style="background:#7f8c8d;" onclick="this.parentElement.classList.toggle('active'); event.stopPropagation();">⋮ More</button><div class="action-dropdown-content"><button style="background:#27ae60;" onclick="printLoanDetails('${id}'); event.stopPropagation();">🖨️ ${t('print')}</button><button class="warning" onclick="openOverdueModal('${id}'); event.stopPropagation();">⚠️ ${t('fine')}</button><button class="warning" onclick="openDiscountModal('${id}'); event.stopPropagation();">💸 ${t('discount')}</button><button style="background:#3498db;" onclick="openEditLoanModal('${id}'); event.stopPropagation();">✏️ ${t('editLoan')}</button>${loan.type === 'month' && loan.remaining_amount > 0 ? `<button style="background:#2c3e50;" onclick="closeLoanManually('${id}'); event.stopPropagation();">🔒 Close Loan</button>` : ''}<button class="danger" onclick="openDeleteLoanModal('${id}'); event.stopPropagation();">🗑️ ${t('deleteLoan')}</button></div></div></div></div>`;
             }
         }
         document.getElementById('searchResult').innerHTML = html;
@@ -2483,7 +2483,7 @@
             start_date: paymentDate, last_date: null, days: null, status: 'active', last_month_check: paymentDate,
             total_fine: 0, total_discount: 0, previous_loan_id: oldLoan.id, previous_principal: oldLoan.principal,
             previous_loan_closed_date: paymentDate, principal_paid: principalPaid, created_from_principal: true,
-            remark: `🔁 यह लोन पुराने लोन #${oldLoan.id} से मूलधन जमा करके बनाया गया है।\n📌 पुराना मूलधन: ₹${oldLoan.principal.toLocaleString('en-IN')}\n💰 मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')}\n🆕 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📅 पुराना लोन बंद तारीख: ${paymentDate}`
+            remark: `🔁 यह लोन ${displayDate(oldLoan.start_date)} के पुराने लोन (#${oldLoan.id}) से मूलधन जमा करके बनाया गया है।\n📌 पुराना मूलधन: ₹${oldLoan.principal.toLocaleString('en-IN')}\n💰 मूलधन जमा: ₹${principalPaid.toLocaleString('en-IN')}\n🆕 नया मूलधन: ₹${newPrincipal.toLocaleString('en-IN')}\n📅 पुराना लोन बंद तारीख: ${paymentDate}`
         };
         loans[newLoanId] = newLoan;
         const ledgerId = Date.now().toString();
@@ -2642,7 +2642,7 @@
         const loan = loans[loanId];
         if (!loan) { alert('❌ लोन नहीं मिला!'); return; }
         if (loan.type !== 'month') { alert('⚠️ यह सुविधा सिर्फ महीने वाले (monthly) लोन के लिए है!'); return; }
-        if (loan.status === 'completed') { alert('⚠️ यह लोन पहले से बंद है!'); return; }
+        if (loan.status === 'completed' && loan.remaining_amount <= 0) { alert('⚠️ यह लोन पहले से बंद है!'); return; }
 
         const oldRemaining = loan.remaining_amount;
         const confirmMsg = oldRemaining > 0
@@ -3412,6 +3412,12 @@
     function saveEditLoan(loanId) {
         const loan = loans[loanId];
         if (!loan) return;
+
+        // Agar loan pehle se "poora hua" hai, to edit karte hi aaj tak ka fresh byaj
+        // dobara calculate ho kar loan galti se "active" na ho jaaye — isliye pehle confirm lo.
+        if (loan.status === 'completed') {
+            if (!confirm('⚠️ यह लोन पहले से "पूरा हुआ" (completed) है।\n\nइसे Edit करने पर आज तक का byaj दोबारा जोड़ा जा सकता है और लोन फिर से "active" हो सकता है।\n\nक्या आप वाकई आगे बढ़ना चाहते हैं?')) return;
+        }
 
         const principal = parseFloat(document.getElementById('loanPrincipal').value);
         let startDateStr = document.getElementById('loanStartDate').value;
