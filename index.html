@@ -1062,24 +1062,39 @@
             const filters = (officerId && currentUser.role !== 'admin') ? { officer_id: officerId } : {};
             
             // Saari rows fetch karo — 1000 ki limit se zyada bhi
+            // Agar beech mein koi page fail ho jaye, to 2 baar retry karo; phir bhi fail ho to
+            // hadError=true flag kar do — taaki is adhuri fetch ko "pura sync" na maan liya jaye.
             async function fetchAll(table, tableFilters) {
                 const PAGE = 1000;
+                const MAX_RETRIES = 2;
                 let allData = [];
                 let from = 0;
+                let hadError = false;
                 while (true) {
-                    let query = supabaseClient.from(table).select('*').range(from, from + PAGE - 1);
-                    for (let [col, val] of Object.entries(tableFilters)) {
-                        query = query.eq(col, val);
+                    let data = null, error = null;
+                    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                        let query = supabaseClient.from(table).select('*').range(from, from + PAGE - 1);
+                        for (let [col, val] of Object.entries(tableFilters)) {
+                            query = query.eq(col, val);
+                        }
+                        const result = await query;
+                        data = result.data; error = result.error;
+                        if (!error) break;
+                        console.warn(`${table} (rows ${from}+) error, attempt ${attempt + 1}/${MAX_RETRIES + 1}:`, error.message);
+                        if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
                     }
-                    const { data, error } = await query;
-                    if (error) { console.error(`${table} error:`, error.message); break; }
+                    if (error) {
+                        console.error(`❌ ${table}: ${MAX_RETRIES + 1} koshishon ke baad bhi error, baaki rows nahi mil payi:`, error.message);
+                        hadError = true;
+                        break;
+                    }
                     if (!data || data.length === 0) break;
                     allData = allData.concat(data);
                     if (data.length < PAGE) break;
                     from += PAGE;
                 }
-                console.log(`✅ ${table}: ${allData.length} rows`);
-                return allData;
+                console.log(`${hadError ? '⚠️ ADHURA' : '✅'} ${table}: ${allData.length} rows`);
+                return { data: allData, hadError };
             }
             
             // Parallel fetch — officers sirf GitHub se aate hain, Supabase se nahi
@@ -1091,14 +1106,26 @@
             ];
             
             const results = await Promise.all(promises);
-            const [usersData, loansData, ledgerData, finesData] = results;
+            const [usersRes, loansRes, ledgerRes, finesRes] = results;
+            const anyError = usersRes.hadError || loansRes.hadError || ledgerRes.hadError || finesRes.hadError;
             
-            if (usersData.length > 0)   usersData.forEach(u => { users[u.id] = u; });
-            if (loansData.length > 0)   loansData.forEach(l => { loans[l.id] = l; });
-            if (ledgerData.length > 0)  ledgerData.forEach(l => { ledger[l.id] = l; });
-            if (finesData.length > 0)   finesData.forEach(f => { fines[f.id] = f; });
+            if (usersRes.data.length > 0)   usersRes.data.forEach(u => { users[u.id] = u; });
+            if (loansRes.data.length > 0)   loansRes.data.forEach(l => { loans[l.id] = l; });
+            if (ledgerRes.data.length > 0)  ledgerRes.data.forEach(l => { ledger[l.id] = l; });
+            if (finesRes.data.length > 0)   finesRes.data.forEach(f => { fines[f.id] = f; });
             
             await saveDataToLocal();
+            
+            if (anyError) {
+                // Sync adhura raha — LAST_SYNC_KEY jaan-bujh kar update NAHI kiya,
+                // taaki agli baar app khulte hi (ya thodi der baad) phir se POORA sync try ho,
+                // adhuri local copy ko "sahi" maan kar byaj/remaining_amount recalculate na ho.
+                console.warn("⚠️ Sync adhura raha (kuch rows nahi mil payi) — agli baar phir poora sync hoga");
+                updateSyncStatus('error', '⚠️ अधूरा सिन्क');
+                refreshUI();
+                return false;
+            }
+            
             localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
             refreshUI();
             updateSyncStatus('synced', '✅ सिन्क');
@@ -3968,8 +3995,10 @@
                             console.log(localEmpty ? '🔄 Local empty — Supabase se load kar raha hoon...' : '🔄 30 min ho gaye — Supabase se sync...');
                             updateSyncStatus('pending', '🔄 सिन्क...');
                             setTimeout(async () => {
+                                // syncFromSupabase() khud hi LAST_SYNC_KEY set karta hai, par SIRF
+                                // tabhi jab sync pura safal raha ho — adhura/error wale case mein nahi,
+                                // taaki agli baar phir se poora sync try ho.
                                 await syncFromSupabase();
-                                localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
                                 await _verifyPendingWithSupabase();
                                 refreshUI();
                             }, 300);
